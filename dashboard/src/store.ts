@@ -3,6 +3,22 @@ import { flattenOtlp, isOtlpPayload } from "./otlp.js";
 import { RingBuffer } from "./ring-buffer.js";
 import type { Counters, GenAISpan } from "./types.js";
 
+/**
+ * Validate an ingest payload (one flat span, an array, or an OTLP/HTTP JSON export)
+ * and split it into accepted spans and a rejected count. Shared by every storage backend.
+ */
+export function parseIncoming(raw: unknown): { spans: GenAISpan[]; rejected: number } {
+  const items = isOtlpPayload(raw) ? flattenOtlp(raw) : Array.isArray(raw) ? raw : [raw];
+  const spans: GenAISpan[] = [];
+  let rejected = 0;
+  for (const item of items) {
+    const span = normaliseSpan(item);
+    if (span) spans.push(span);
+    else rejected += 1;
+  }
+  return { spans, rejected };
+}
+
 /** In-memory span store: validates incoming spans and keeps the newest N in a ring buffer. */
 export class ObservabilityStore {
   private readonly spans: RingBuffer<GenAISpan>;
@@ -14,16 +30,10 @@ export class ObservabilityStore {
   }
 
   ingest(raw: unknown): Counters {
-    const items = isOtlpPayload(raw) ? flattenOtlp(raw) : Array.isArray(raw) ? raw : [raw];
-    for (const item of items) {
-      const span = normaliseSpan(item);
-      if (!span) {
-        this.rejected += 1;
-        continue;
-      }
-      this.spans.push(span);
-      this.accepted += 1;
-    }
+    const { spans, rejected } = parseIncoming(raw);
+    for (const span of spans) this.spans.push(span);
+    this.accepted += spans.length;
+    this.rejected += rejected;
     return this.counters();
   }
 

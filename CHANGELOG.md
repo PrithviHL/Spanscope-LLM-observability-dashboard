@@ -8,6 +8,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Optional **ClickHouse storage** (`STORAGE=clickhouse`): spans persist across
+  restarts in a day-partitioned `MergeTree` table with a TTL, and the overview,
+  model roll-ups, span search and trace lookups run as SQL inside ClickHouse.
+  No driver dependency (HTTP interface via `fetch`); all user input is sent as
+  bound query parameters. Configured with `CLICKHOUSE_URL`, `CLICKHOUSE_USER`,
+  `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_DATABASE` and `CLICKHOUSE_TTL_DAYS`.
+- `docker-compose.yml` to run ClickHouse locally.
+- `SpanRepository` interface, so routes no longer depend on the in-memory store.
+- `/healthz` returns `503` when the storage backend is unreachable; ingest
+  returns `503` on storage errors. `/api/config` reports the storage backend,
+  and the web app footer shows it.
+- Tests: ClickHouse backend unit tests, and integration tests that check the
+  ClickHouse and in-memory backends return identical results. CI runs them
+  against a real ClickHouse service container, plus a server smoke test.
+
 - Redesigned web app: Inter typography, glass header, soft background glow,
   staggered entrance animations and charts that draw in on first load; full
   light and dark themes with a circular theme-switch transition.

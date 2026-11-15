@@ -35,19 +35,59 @@ chart has something to show.
 
 ## Configuration
 
-| Variable                    | Default     | Meaning                                                       |
-| --------------------------- | ----------- | ------------------------------------------------------------- |
-| `PORT`                      | `8011`      | HTTP port                                                     |
-| `HOST`                      | `localhost` | Interface to bind; use `0.0.0.0` to accept remote connections |
-| `SEED_SPANS`                | `1200`      | Synthetic spans to load on start-up; `0` starts empty         |
-| `BUFFER_CAPACITY`           | `10000`     | Spans held in memory; the oldest are evicted first            |
-| `DEMO_MODE`                 | unset       | `1` disables clearing spans (`DELETE /api/spans` returns 403) |
-| `LIVE_TRAFFIC_PER_MIN`      | `0`         | Synthetic spans generated per minute in the background        |
-| `INGEST_RATE_LIMIT_PER_MIN` | `0`         | Ingest requests per client IP per minute; `0` means no limit  |
-| `SERVE`                     | unset       | `1` is the same as passing `--serve`                          |
+| Variable                    | Default                 | Meaning                                                       |
+| --------------------------- | ----------------------- | ------------------------------------------------------------- |
+| `PORT`                      | `8011`                  | HTTP port                                                     |
+| `HOST`                      | `localhost`             | Interface to bind; use `0.0.0.0` to accept remote connections |
+| `SEED_SPANS`                | `1200`                  | Synthetic spans to load on start-up; `0` starts empty         |
+| `BUFFER_CAPACITY`           | `10000`                 | Spans held in memory; the oldest are evicted first            |
+| `DEMO_MODE`                 | unset                   | `1` disables clearing spans (`DELETE /api/spans` returns 403) |
+| `LIVE_TRAFFIC_PER_MIN`      | `0`                     | Synthetic spans generated per minute in the background        |
+| `INGEST_RATE_LIMIT_PER_MIN` | `0`                     | Ingest requests per client IP per minute; `0` means no limit  |
+| `SERVE`                     | unset                   | `1` is the same as passing `--serve`                          |
+| `STORAGE`                   | `memory`                | `memory` or `clickhouse` (see below)                          |
+| `CLICKHOUSE_URL`            | `http://localhost:8123` | ClickHouse HTTP interface                                     |
+| `CLICKHOUSE_USER`           | `default`               | ClickHouse user                                               |
+| `CLICKHOUSE_PASSWORD`       | empty                   | ClickHouse password                                           |
+| `CLICKHOUSE_DATABASE`       | `spanscope`             | Database, created if missing                                  |
+| `CLICKHOUSE_TTL_DAYS`       | `30`                    | ClickHouse deletes spans older than this                      |
 
 Invalid values stop the server at start-up with a clear message, for example
 `PORT must be an integer >= 1, got "abc"`.
+
+## ClickHouse storage (optional)
+
+By default spans live in memory. To keep them across restarts and query them
+with SQL, run ClickHouse with Docker and switch the backend:
+
+```bash
+docker compose up -d          # from the repository root
+```
+
+```bash
+cd dashboard && STORAGE=clickhouse npm run serve
+```
+
+On start-up Spanscope creates the `spanscope` database and `spans` table if
+they don't exist. Demo spans are only seeded into an empty table, so restarts
+don't duplicate them. The footer of the web app shows which storage is in use,
+and `/healthz` returns `503` if ClickHouse is unreachable.
+
+To look at the data directly:
+
+```bash
+docker compose exec clickhouse clickhouse-client --query "SELECT model, count(), quantileExactInclusive(0.95)(latency_ms) FROM spanscope.spans GROUP BY model"
+```
+
+The `docker-compose.yml` setup is for local development: the `default` user
+has no password and the port is bound to localhost. For a shared or hosted
+ClickHouse, set `CLICKHOUSE_URL`, `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD`.
+
+To run the integration tests against it:
+
+```bash
+CLICKHOUSE_TEST_URL=http://localhost:8123 npx tsx --test tests/clickhouse.integration.test.ts
+```
 
 ## Web app
 
@@ -83,7 +123,9 @@ is rejected and counted. See [`docs/api.md`](../docs/api.md) for every endpoint.
 | `src/server.ts`           | HTTP routes: ingest, web app assets, JSON API, health                    |
 | `src/normalise.ts`        | Validate and normalise one incoming span                                 |
 | `src/otlp.ts`             | Flatten OTLP/HTTP JSON export requests into spans                        |
-| `src/store.ts`            | `ObservabilityStore`: ingest, counters, snapshot, clear                  |
+| `src/repository.ts`       | `SpanRepository` interface and the in-memory `MemoryRepository`          |
+| `src/clickhouse.ts`       | Optional ClickHouse backend: HTTP client, schema, SQL queries            |
+| `src/store.ts`            | `ObservabilityStore` (ingest, counters, snapshot, clear), payload parser |
 | `src/ring-buffer.ts`      | Fixed-capacity FIFO buffer                                               |
 | `src/analytics.ts`        | Summaries, time buckets and span queries for `/api/*`                    |
 | `src/rollup.ts`           | Percentiles and per-model roll-ups                                       |
@@ -92,10 +134,11 @@ is rejected and counted. See [`docs/api.md`](../docs/api.md) for every endpoint.
 | `src/legacy-dashboard.ts` | Server-rendered table at `/dashboard`                                    |
 | `src/types.ts`            | Shared types                                                             |
 | `public/`                 | Web app (`index.html`, `app.js`, `charts.js`, `styles.css`)              |
-| `tests/`                  | Unit and HTTP tests                                                      |
+| `tests/`                  | Unit, HTTP and (optional) ClickHouse integration tests                   |
 
 ## Limitations
 
-- Spans live only in memory and are lost on restart. There is no database yet.
+- With the default `memory` storage, spans are lost on restart. Use
+  `STORAGE=clickhouse` to persist them.
 - There is no authentication. Keep `HOST=localhost` unless the network is trusted.
 - Costs are estimates from the list prices in `src/pricing.ts`. Unknown models show $0.

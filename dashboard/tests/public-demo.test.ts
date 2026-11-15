@@ -21,7 +21,10 @@ test("demo mode refuses to clear spans and reports itself", async () => {
   store.ingest(generateLiveSpans(5));
   const app = buildApp(store, { demo: true });
 
-  assert.deepEqual(await (await app.request("/api/config")).json(), { demo: true });
+  assert.deepEqual(await (await app.request("/api/config")).json(), {
+    demo: true,
+    storage: "memory",
+  });
   const res = await app.request("/api/spans", { method: "DELETE" });
   assert.equal(res.status, 403);
   assert.equal(store.counters().held, 5);
@@ -31,7 +34,10 @@ test("without demo mode, clearing still works", async () => {
   const store = new ObservabilityStore(100);
   store.ingest(generateLiveSpans(5));
   const app = buildApp(store);
-  assert.deepEqual(await (await app.request("/api/config")).json(), { demo: false });
+  assert.deepEqual(await (await app.request("/api/config")).json(), {
+    demo: false,
+    storage: "memory",
+  });
   assert.equal((await app.request("/api/spans", { method: "DELETE" })).status, 200);
   assert.equal(store.counters().held, 0);
 });

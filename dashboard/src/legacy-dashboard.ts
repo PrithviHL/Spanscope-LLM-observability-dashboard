@@ -1,5 +1,4 @@
-import { rollUpByModel } from "./rollup.js";
-import type { ObservabilityStore } from "./store.js";
+import type { Counters, ModelRollup } from "./types.js";
 
 function escapeHtml(s: unknown): string {
   return String(s)
@@ -11,9 +10,7 @@ function escapeHtml(s: unknown): string {
 }
 
 /** Server-rendered single-table view, kept at /dashboard for scripts and no-JS clients. */
-export function renderDashboardHtml(store: ObservabilityStore): string {
-  const rollups = rollUpByModel(store.snapshot());
-  const counters = store.counters();
+export function renderDashboardHtml(counters: Counters, rollups: ModelRollup[]): string {
   const rows = rollups
     .map(
       (r) =>

@@ -79,11 +79,15 @@ process.
 ## Project status
 
 This is a working prototype. The ingest server, web app and pipeline run and
-are tested. The production pieces from the design brief are not built yet:
-ClickHouse/Postgres storage, model-based eval jobs, Alertmanager integration,
+are tested, and spans can optionally be stored in ClickHouse. The other
+production pieces from the design brief are not built yet: Postgres metadata
+storage, model-based eval jobs, Alertmanager integration,
 and a link between the dashboard and the pipeline.
 [docs/architecture.md](docs/architecture.md#target-production-architecture)
 shows what is a stand-in and what's next.
 
-Spans live in memory only, and the server has no authentication. Run it on
-localhost or a trusted network.
+Spans live in memory by default. An optional ClickHouse backend
+(`STORAGE=clickhouse`, with a `docker-compose.yml` for local use) persists them
+and runs the analytics as SQL; see the
+[dashboard README](dashboard/README.md#clickhouse-storage-optional). The server
+has no authentication, so run it on localhost or a trusted network.

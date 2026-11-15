@@ -1,5 +1,16 @@
 /** Runtime configuration, read from CLI flags and environment variables. */
+export type StorageKind = "memory" | "clickhouse";
+
 export type Config = {
+  /** Where spans live: an in-memory ring buffer (default) or ClickHouse. */
+  storage: StorageKind;
+  clickhouse: {
+    url: string;
+    user: string;
+    password: string;
+    database: string;
+    ttlDays: number;
+  };
   /** Start the HTTP server (otherwise print a roll-up and exit). */
   serve: boolean;
   host: string;
@@ -29,7 +40,19 @@ export function loadConfig(
   argv: readonly string[] = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env,
 ): Config {
+  const storage = (env["STORAGE"] || "memory").toLowerCase();
+  if (storage !== "memory" && storage !== "clickhouse") {
+    throw new Error(`STORAGE must be "memory" or "clickhouse", got "${env["STORAGE"]}"`);
+  }
   return {
+    storage,
+    clickhouse: {
+      url: env["CLICKHOUSE_URL"] || "http://localhost:8123",
+      user: env["CLICKHOUSE_USER"] || "default",
+      password: env["CLICKHOUSE_PASSWORD"] ?? "",
+      database: env["CLICKHOUSE_DATABASE"] || "spanscope",
+      ttlDays: intFrom(env["CLICKHOUSE_TTL_DAYS"], 30, "CLICKHOUSE_TTL_DAYS", 1),
+    },
     serve: argv.includes("--serve") || env["SERVE"] === "1",
     host: env["HOST"] || "localhost",
     port: intFrom(env["PORT"], 8011, "PORT", 1),

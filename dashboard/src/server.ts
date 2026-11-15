@@ -2,19 +2,12 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import {
-  inWindow,
-  querySpans,
-  summarize,
-  timeseries,
-  toView,
-  type SpanQuery,
-} from "./analytics.js";
+import type { SpanQuery } from "./analytics.js";
+import { renderDashboardHtml } from "./legacy-dashboard.js";
 import { PRICE_USD_PER_MTOKEN } from "./pricing.js";
 import { RateLimiter } from "./rate-limit.js";
-import { rollUpByModel } from "./rollup.js";
-import { renderDashboardHtml } from "./legacy-dashboard.js";
-import type { ObservabilityStore } from "./store.js";
+import { MemoryRepository, type SpanRepository } from "./repository.js";
+import { ObservabilityStore } from "./store.js";
 
 export const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
@@ -59,7 +52,11 @@ function clientKey(c: Context): string {
 }
 
 /** Build the HTTP app: ingest endpoints, the web app, its JSON API and health checks. */
-export function buildApp(store: ObservabilityStore, options: AppOptions = {}): Hono {
+export function buildApp(
+  source: SpanRepository | ObservabilityStore,
+  options: AppOptions = {},
+): Hono {
+  const repo = source instanceof ObservabilityStore ? new MemoryRepository(source) : source;
   const app = new Hono();
   const demo = options.demo ?? false;
   const limiter = options.ingestRateLimitPerMin
@@ -78,12 +75,17 @@ export function buildApp(store: ObservabilityStore, options: AppOptions = {}): H
         429,
       );
     }
+    let body: unknown;
     try {
-      const body = await c.req.json();
-      const counters = store.ingest(body);
-      return c.json({ status: "accepted", counters }, 202);
+      body = await c.req.json();
     } catch (err) {
       return c.json({ error: "bad_request", message: String(err) }, 400);
+    }
+    try {
+      const counters = await repo.ingest(body);
+      return c.json({ status: "accepted", counters }, 202);
+    } catch (err) {
+      return c.json({ error: "storage_unavailable", message: String(err) }, 503);
     }
   };
 
@@ -97,23 +99,15 @@ export function buildApp(store: ObservabilityStore, options: AppOptions = {}): H
   app.get("/assets/:file", (c) => serveAsset(c, c.req.param("file")));
 
   // ---- JSON API used by the web app ---------------------------------------
-  app.get("/api/overview", (c) => {
+  app.get("/api/overview", async (c) => {
     const nowMs = Date.now();
     const windowMs = parseWindowMs(c.req.query("window"));
-    const spans = inWindow(store.snapshot(), nowMs, windowMs);
-    return c.json({
-      nowMs,
-      windowMs,
-      counters: store.counters(),
-      summary: summarize(spans),
-      series: timeseries(spans, nowMs, windowMs),
-      models: rollUpByModel(spans),
-    });
+    return c.json({ nowMs, windowMs, ...(await repo.overview(nowMs, windowMs)) });
   });
 
-  app.get("/api/models", (c) =>
+  app.get("/api/models", async (c) =>
     c.json({
-      models: rollUpByModel(store.snapshot()).map((r) => ({
+      models: (await repo.models()).map((r) => ({
         ...r,
         errorRate: r.count ? Number((r.errors / r.count).toFixed(4)) : 0,
         price: PRICE_USD_PER_MTOKEN[r.model] ?? null,
@@ -122,7 +116,7 @@ export function buildApp(store: ObservabilityStore, options: AppOptions = {}): H
     }),
   );
 
-  app.get("/api/spans", (c) => {
+  app.get("/api/spans", async (c) => {
     const status = c.req.query("status");
     const model = c.req.query("model");
     const q = c.req.query("q");
@@ -133,43 +127,53 @@ export function buildApp(store: ObservabilityStore, options: AppOptions = {}): H
     if (model) query.model = model;
     if (q) query.q = q;
     if (status === "OK" || status === "ERROR") query.status = status;
-    return c.json(querySpans(store.snapshot(), query));
+    return c.json(await repo.spans(query));
   });
 
-  app.get("/api/traces/:traceId", (c) => {
+  app.get("/api/traces/:traceId", async (c) => {
     const id = c.req.param("traceId").toLowerCase();
-    const spans = store
-      .snapshot()
-      .filter((s) => s.trace_id === id)
-      .sort((a, b) => a.start_time_unix_nano - b.start_time_unix_nano)
-      .map(toView);
+    const spans = await repo.trace(id);
     if (spans.length === 0) return c.json({ error: "not_found" }, 404);
     return c.json({ trace_id: id, spans });
   });
 
-  app.get("/api/config", (c) => c.json({ demo }));
+  app.get("/api/config", (c) => c.json({ demo, storage: repo.kind }));
 
-  app.delete("/api/spans", (c) => {
+  app.delete("/api/spans", async (c) => {
     if (demo) {
       return c.json(
         { error: "forbidden", message: "Clearing is disabled in the public demo" },
         403,
       );
     }
-    return c.json({ status: "cleared", counters: store.clear() });
+    return c.json({ status: "cleared", counters: await repo.clear() });
   });
 
   // ---- legacy server-rendered table ---------------------------------------
-  app.get("/dashboard", (c) => c.html(renderDashboardHtml(store)));
-
-  app.get("/dashboard.json", (c) =>
-    c.json({
-      counters: store.counters(),
-      models: rollUpByModel(store.snapshot()),
-    }),
+  app.get("/dashboard", async (c) =>
+    c.html(renderDashboardHtml(await repo.counters(), await repo.models())),
   );
 
-  app.get("/healthz", (c) => c.json({ status: "ok", counters: store.counters() }));
+  app.get("/dashboard.json", async (c) =>
+    c.json({ counters: await repo.counters(), models: await repo.models() }),
+  );
+
+  app.get("/healthz", async (c) => {
+    try {
+      await repo.ping();
+      return c.json({ status: "ok", storage: repo.kind, counters: await repo.counters() });
+    } catch (err) {
+      return c.json({ status: "error", storage: repo.kind, message: String(err) }, 503);
+    }
+  });
+
+  // A storage backend that is down should answer with JSON, not a bare 500 page.
+  app.onError((err, c) =>
+    c.json(
+      { error: "server_error", message: err instanceof Error ? err.message : String(err) },
+      500,
+    ),
+  );
 
   return app;
 }

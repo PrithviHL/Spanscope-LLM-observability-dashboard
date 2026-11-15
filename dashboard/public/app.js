@@ -1413,6 +1413,16 @@ async function route() {
   }
 }
 
+// Footer: which storage backend this server runs on.
+api("/api/config")
+  .then((cfg) => {
+    $("#storage-label").textContent =
+      cfg.storage === "clickhouse" ? " · Storage: ClickHouse" : " · Storage: in memory";
+  })
+  .catch(() => {
+    /* label is informational only */
+  });
+
 // Filter changes on the traces page use replaceState and don't fire this.
 window.addEventListener("hashchange", () => {
   if (palette.open) closePalette();

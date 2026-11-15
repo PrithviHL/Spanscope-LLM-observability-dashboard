@@ -5,6 +5,14 @@ import { DEMO_MODELS, generateSyntheticSpans } from "../src/synthetic.js";
 
 test("loadConfig uses defaults when nothing is set", () => {
   assert.deepEqual(loadConfig([], {}), {
+    storage: "memory",
+    clickhouse: {
+      url: "http://localhost:8123",
+      user: "default",
+      password: "",
+      database: "spanscope",
+      ttlDays: 30,
+    },
     serve: false,
     host: "localhost",
     port: 8011,
@@ -31,6 +39,27 @@ test("loadConfig reads the --serve flag and environment variables", () => {
   assert.equal(pub.demo, true);
   assert.equal(pub.liveTrafficPerMin, 20);
   assert.equal(pub.ingestRateLimitPerMin, 60);
+});
+
+test("loadConfig reads ClickHouse settings and rejects unknown storage", () => {
+  const cfg = loadConfig([], {
+    STORAGE: "ClickHouse",
+    CLICKHOUSE_URL: "http://ch:8123",
+    CLICKHOUSE_USER: "app",
+    CLICKHOUSE_PASSWORD: "pw",
+    CLICKHOUSE_DATABASE: "obs",
+    CLICKHOUSE_TTL_DAYS: "7",
+  });
+  assert.equal(cfg.storage, "clickhouse");
+  assert.deepEqual(cfg.clickhouse, {
+    url: "http://ch:8123",
+    user: "app",
+    password: "pw",
+    database: "obs",
+    ttlDays: 7,
+  });
+  assert.throws(() => loadConfig([], { STORAGE: "postgres" }), /STORAGE/);
+  assert.throws(() => loadConfig([], { CLICKHOUSE_TTL_DAYS: "0" }), /CLICKHOUSE_TTL_DAYS/);
 });
 
 test("loadConfig rejects invalid numbers", () => {

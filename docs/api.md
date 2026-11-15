@@ -49,6 +49,7 @@ IDs that aren't valid hex are replaced with random ones. A non-string
 | `202` | `{"status": "accepted", "counters": {"accepted", "rejected", "held"}}` |
 | `400` | `{"error": "bad_request", "message": "..."}`: the body is not valid JSON |
 | `413` | `{"error": "payload_too_large"}`: the body is over 5 MB |
+| `503` | `{"error": "storage_unavailable", ...}`: the storage backend (ClickHouse) rejected the write or is unreachable |
 | `429` | `{"error": "rate_limited", ...}`: more than `INGEST_RATE_LIMIT_PER_MIN` requests from this IP in the last minute |
 
 Protobuf-encoded OTLP is not supported.
@@ -129,7 +130,8 @@ Deletes every held span and resets the counters. This can't be undone. Returns
 
 ### `GET /api/config`
 
-`{ "demo": true | false }`, so the web app can hide controls the server refuses.
+`{ "demo": true | false, "storage": "memory" | "clickhouse" }`, so the web app
+can hide controls the server refuses and show which storage is in use.
 
 ## Other endpoints
 
@@ -139,4 +141,4 @@ Deletes every held span and resets the counters. This can't be undone. Returns
 | GET | `/assets/{index.html,app.js,charts.js,styles.css}` | web app files; anything else is `404` |
 | GET | `/dashboard` | server-rendered HTML table, no JavaScript needed |
 | GET | `/dashboard.json` | `{ counters, models }` across all held spans |
-| GET | `/healthz` | `{ "status": "ok", counters }`, for liveness probes |
+| GET | `/healthz` | `{ "status": "ok", "storage", counters }`, for liveness probes; `503` with `"status": "error"` if the storage backend is unreachable |

@@ -10,8 +10,9 @@
  */
 
 import { serve } from "@hono/node-server";
-import { loadConfig } from "./config.js";
-import { rollUpByModel } from "./rollup.js";
+import { ClickHouseRepository } from "./clickhouse.js";
+import { loadConfig, type Config } from "./config.js";
+import { MemoryRepository, type SpanRepository } from "./repository.js";
 import { buildApp } from "./server.js";
 import { ObservabilityStore } from "./store.js";
 import { DEMO_MODELS, generateLiveSpans, generateSyntheticSpans } from "./synthetic.js";
@@ -36,25 +37,40 @@ function reportRollups(rollups: ModelRollup[]): void {
   }
 }
 
-function main(): void {
-  const config = loadConfig();
-  const store = new ObservabilityStore(config.capacity);
+async function openRepository(config: Config): Promise<SpanRepository> {
+  if (config.storage === "clickhouse") {
+    const { url, database } = config.clickhouse;
+    console.log(`[spanscope] storage: ClickHouse at ${url} (database "${database}")`);
+    return ClickHouseRepository.connect(config.clickhouse);
+  }
+  console.log(`[spanscope] storage: in memory (newest ${config.capacity} spans)`);
+  return new MemoryRepository(new ObservabilityStore(config.capacity));
+}
 
-  if (config.seedSpans > 0) {
+async function main(): Promise<void> {
+  const config = loadConfig();
+  const repo = await openRepository(config);
+
+  // ClickHouse keeps data across restarts, so only seed an empty table there.
+  const alreadyHeld = (await repo.counters()).held;
+  if (config.seedSpans > 0 && alreadyHeld === 0) {
     console.log(`[spanscope] generating ${config.seedSpans} synthetic OTel-GenAI spans...`);
-    store.ingest(
+    await repo.ingest(
       generateSyntheticSpans({ spans: config.seedSpans, errorRate: 0.03, models: DEMO_MODELS }),
     );
-    reportRollups(rollUpByModel(store.snapshot()));
-    console.log("[spanscope] counters:", store.counters());
+    reportRollups(await repo.models());
+    console.log("[spanscope] counters:", await repo.counters());
+  } else if (alreadyHeld > 0) {
+    console.log(`[spanscope] ${alreadyHeld} spans already stored; skipping demo seed`);
   }
 
   if (!config.serve) {
     console.log("[spanscope] run `npm run serve` to start the web app and ingest server");
+    await repo.close();
     return;
   }
 
-  const app = buildApp(store, {
+  const app = buildApp(repo, {
     demo: config.demo,
     ingestRateLimitPerMin: config.ingestRateLimitPerMin,
   });
@@ -77,7 +93,11 @@ function main(): void {
       carry += perTick;
       const n = Math.floor(carry);
       carry -= n;
-      if (n > 0) store.ingest(generateLiveSpans(n));
+      if (n > 0) {
+        repo.ingest(generateLiveSpans(n)).catch((err: unknown) => {
+          console.error(`[spanscope] live traffic insert failed: ${String(err)}`);
+        });
+      }
     }, 5000);
     traffic.unref();
     console.log(`[spanscope] live demo traffic: ${config.liveTrafficPerMin} spans/min`);
@@ -86,16 +106,16 @@ function main(): void {
   const shutdown = (signal: string) => {
     if (traffic) clearInterval(traffic);
     console.log(`[spanscope] ${signal} received, shutting down`);
-    server.close(() => process.exit(0));
+    server.close(() => {
+      repo.close().finally(() => process.exit(0));
+    });
     setTimeout(() => process.exit(0), 2000).unref();
   };
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-try {
-  main();
-} catch (err) {
+main().catch((err: unknown) => {
   console.error(`[spanscope] ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
-}
+});
