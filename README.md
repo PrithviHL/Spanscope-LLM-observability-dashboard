@@ -8,7 +8,7 @@ web app, and includes a reference pipeline for tail sampling, evals, drift detec
 
 [![CI](https://github.com/PrithviHL/Spanscope-LLM-observability-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/PrithviHL/Spanscope-LLM-observability-dashboard/actions/workflows/ci.yml)
 
-**[▶ Live demo](https://llm-observability-dashboard-mthw.onrender.com/)**: runs on
+**[▶ Live demo](https://spanscope-llm-observability-dashboard.onrender.com/)**: runs on
 Render's free plan, so the first visit may take up to a minute while it wakes.
 
 ## What's inside
