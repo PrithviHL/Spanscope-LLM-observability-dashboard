@@ -136,3 +136,14 @@ test("health check reports 503 when ClickHouse is down", async () => {
   });
   assert.equal(ingest.status, 503);
 });
+
+test("spans older than the TTL are counted as rejected, not inserted", async () => {
+  const { calls, fetchFn } = fakeClickHouse(() => ({ data: [{ held: 1 }] }));
+  const repo = await ClickHouseRepository.connect(cfg(fetchFn));
+  const old = { ...generateLiveSpans(1)[0]!, start_time_unix_nano: 1e18, end_time_unix_nano: 1e18 };
+  const counters = await repo.ingest([old, ...generateLiveSpans(1)]);
+  assert.equal(counters.accepted, 1);
+  assert.equal(counters.rejected, 1);
+  const insert = calls.find((c) => c.url.searchParams.get("query")?.startsWith("INSERT"))!;
+  assert.equal(insert.body.split("\n").length, 1);
+});

@@ -211,7 +211,10 @@ export class ClickHouseRepository implements SpanRepository {
   private accepted = 0;
   private rejected = 0;
 
-  private constructor(private readonly ch: ClickHouseClient) {}
+  private constructor(
+    private readonly ch: ClickHouseClient,
+    private readonly ttlDays: number,
+  ) {}
 
   /** Connect, create the database and table if needed, and return a ready repository. */
   static async connect(cfg: ClickHouseConfig): Promise<ClickHouseRepository> {
@@ -242,11 +245,16 @@ export class ClickHouseRepository implements SpanRepository {
       PARTITION BY toYYYYMMDD(toDateTime(intDiv(end_ms, 1000)))
       ORDER BY (end_ms, model)
       TTL toDateTime(intDiv(end_ms, 1000)) + INTERVAL ${cfg.ttlDays} DAY`);
-    return new ClickHouseRepository(ch);
+    return new ClickHouseRepository(ch, cfg.ttlDays);
   }
 
   async ingest(raw: unknown): Promise<Counters> {
-    const { spans, rejected } = parseIncoming(raw);
+    const parsed = parseIncoming(raw);
+    // ClickHouse drops rows already past the table TTL on insert. Count them as
+    // rejected instead of reporting them accepted and losing them silently.
+    const cutoffNs = (Date.now() - this.ttlDays * 86_400_000) * 1e6;
+    const spans = parsed.spans.filter((s) => s.end_time_unix_nano >= cutoffNs);
+    const rejected = parsed.rejected + (parsed.spans.length - spans.length);
     await this.ch.insert("spans", spans.map(toRow));
     this.accepted += spans.length;
     this.rejected += rejected;

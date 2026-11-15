@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A span sent without timestamps was stored at 1 January 1970, so it never
+  appeared on any chart (and ClickHouse expired it immediately). It is now
+  stamped with the time it was received.
+
 ### Added
 
 - Optional **ClickHouse storage** (`STORAGE=clickhouse`): spans persist across

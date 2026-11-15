@@ -38,6 +38,12 @@ is true:
 
 - `gen_ai.system` or `gen_ai.request.model` is missing or not a string
 - the timestamps are not numbers, or the end is before the start
+
+Timestamps are optional. A span with neither timestamp is stamped with the
+time it was received; with only one, the other is set to the same value (zero
+latency). With `STORAGE=clickhouse`, spans that ended more than
+`CLICKHOUSE_TTL_DAYS` ago are also rejected, because ClickHouse would expire
+them immediately.
 - a token count is negative or not a whole number
 
 IDs that aren't valid hex are replaced with random ones. A non-string

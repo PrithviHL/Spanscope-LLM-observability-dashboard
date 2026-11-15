@@ -75,3 +75,19 @@ test("ObservabilityStore tracks accepted, rejected, held", () => {
   assert.equal(c.rejected, 1);
   assert.equal(c.held, 1);
 });
+
+test("spans without timestamps are stamped with the time they arrived", () => {
+  const store = new ObservabilityStore(10);
+  const before = Date.now() * 1e6;
+  store.ingest({
+    attributes: { "gen_ai.system": "openai", "gen_ai.request.model": "gpt-4o-mini" },
+  });
+  store.ingest({
+    end_time_unix_nano: 5e18,
+    attributes: { "gen_ai.system": "openai", "gen_ai.request.model": "gpt-4o-mini" },
+  });
+  const [a, b] = store.snapshot();
+  assert.ok(a!.end_time_unix_nano >= before);
+  assert.equal(a!.start_time_unix_nano, a!.end_time_unix_nano);
+  assert.equal(b!.start_time_unix_nano, 5e18); // only end given: zero latency
+});

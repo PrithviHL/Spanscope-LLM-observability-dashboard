@@ -47,8 +47,14 @@ export function normaliseSpan(raw: unknown): GenAISpan | null {
   const attrs: Record<string, unknown> = { ...(rawAttrs as Record<string, unknown> | undefined) };
   if (typeof attrs["gen_ai.system"] !== "string") return null;
   if (typeof attrs["gen_ai.request.model"] !== "string") return null;
-  const start = Number(r["start_time_unix_nano"] ?? 0);
-  const end = Number(r["end_time_unix_nano"] ?? start);
+  // Timestamps are optional. With neither, the span is stamped with the time it
+  // arrived; with only one, the other is set equal to it (zero latency).
+  const rawStart = r["start_time_unix_nano"];
+  const rawEnd = r["end_time_unix_nano"];
+  const hasStart = rawStart !== undefined && rawStart !== null;
+  const hasEnd = rawEnd !== undefined && rawEnd !== null;
+  const start = hasStart ? Number(rawStart) : hasEnd ? Number(rawEnd) : Date.now() * 1e6;
+  const end = hasEnd ? Number(rawEnd) : start;
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
   if (end < start) return null;
   for (const key of TOKEN_KEYS) {
