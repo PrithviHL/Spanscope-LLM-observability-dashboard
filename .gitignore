@@ -1,4 +1,24 @@
+# OS / editors
 .DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Node
 node_modules/
+coverage/
+*.log
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Local configuration
+.env
+.env.*
+!.env.example

@@ -7,6 +7,8 @@ lesson: 11
 tags: [capstone, observability, otel, langfuse, phoenix, evals, drift, clickhouse]
 ---
 
+> **Note:** this is the original project brief. It describes the *target* production architecture. For what is implemented in this repository today, see [`../architecture.md`](../architecture.md).
+
 Given production LLM traffic across at least six SDK families (OpenAI, Anthropic, Google GenAI, LangChain, LlamaIndex, vLLM), deploy a self-hosted observability plane that ingests OTLP GenAI-semconv spans, runs evals, detects drift, and alerts.
 
 Build plan:

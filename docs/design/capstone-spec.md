@@ -1,5 +1,7 @@
 # Capstone 11 — LLM Observability & Eval Dashboard
 
+> **Note:** this is the original project brief. It describes the *target* production architecture. For what is implemented in this repository today, see [`../architecture.md`](../architecture.md).
+
 > Langfuse went open-core. Arize Phoenix published the 2026 GenAI semconv mappings. Helicone and Braintrust both doubled down on per-user cost attribution. Traceloop's OpenLLMetry became the de-facto SDK instrumentation. The production shape is ClickHouse for traces, Postgres for metadata, Next.js for UI, and a small army of eval jobs (DeepEval, RAGAS, LLM-judge) running over sampled traces. Build one self-hosted, ingest from at least four SDK families, and demonstrate catching an injected regression in under five minutes.
 
 **Type:** Capstone
@@ -96,7 +98,7 @@ $ curl -X POST https://my-otel-collector/v1/traces -d @trace.json
 
 ## Ship It
 
-`outputs/skill-llm-observability.md` is the deliverable. Given an LLM application, the dashboard ingests its traces, runs evals, alerts on drift, and surfaces cost/user breakdown in Next.js.
+[`assessment-rubric.md`](assessment-rubric.md) is the deliverable. Given an LLM application, the dashboard ingests its traces, runs evals, alerts on drift, and surfaces cost/user breakdown in Next.js.
 
 | Weight | Criterion | How it is measured |
 |:-:|---|---|

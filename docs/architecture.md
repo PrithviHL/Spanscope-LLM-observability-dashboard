@@ -1,0 +1,86 @@
+# Architecture
+
+This repository has two runnable parts. They share the same span schema, the
+[OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/),
+but they don't call each other yet.
+
+```text
+ your LLM app ──OTLP/HTTP JSON──►┐
+ curl / web app "Send data" ────►│  dashboard/  (Node.js, Hono)
+                                 │  ┌──────────────────────────────────────────┐
+                                 └─►│ POST /trace, /v1/traces                  │
+                                    │   otlp.ts → normalise.ts → store.ts      │
+                                    │   (validate)              (ring buffer,  │
+                                    │                            newest 10k)   │
+                                    │                               │          │
+                                    │   analytics.ts / rollup.ts ◄──┘          │
+                                    │        │                                 │
+                                    │   GET /api/* ──► public/ web app         │
+                                    └──────────────────────────────────────────┘
+
+ pipeline/  (Python, stdlib)
+   simulate ─► evals (child spans) ─► TailSampler ─► SpanStore ─► alerts
+        └──────────────► prompt fingerprints ─► PSI drift
+```
+
+## Dashboard (`dashboard/`)
+
+**Ingest.** `POST /trace` and `POST /v1/traces` accept flat spans or an OTLP/HTTP
+JSON export request. `otlp.ts` flattens the OTLP shape and decodes typed
+attribute values. `normalise.ts` validates every span: the required GenAI
+attributes, sane timestamps and non-negative whole-number token counts. It also
+fixes up IDs. Invalid spans are counted, never stored. Request bodies are capped
+at 5 MB.
+
+**Storage.** `ObservabilityStore` keeps the newest `BUFFER_CAPACITY` spans
+(default 10,000) in a `RingBuffer`, so memory is bounded and the oldest spans
+are evicted first. Nothing is persisted.
+
+**Query.** `analytics.ts` computes the window summary, 60 time buckets (count,
+errors, cost, p50/p95) and filtered, paginated span lists. `rollup.ts` produces
+per-model p50/p95/p99 latency, error and token counts and cost. Cost uses the
+list prices in `pricing.ts`. All queries scan the in-memory snapshot, which is
+fine at 10k spans.
+
+**Web app.** `public/` is a dependency-free single-page app (hash routing, ES
+modules, hand-written SVG charts). It polls the JSON API every 5 seconds. See
+[`api.md`](api.md).
+
+## Pipeline (`pipeline/`)
+
+Python reference implementations of the processing stages that would run
+behind the collector in production:
+
+| Stage | Module | Behaviour |
+|---|---|---|
+| Evals | `evals.py` | Faithfulness, toxicity and PII-leak scores, written as `eval` child spans of each LLM span |
+| Tail sampling | `sampler.py` | Keeps 100% of errored, toxic or PII-flagged traces, plus a random share of the rest |
+| Storage | `store.py` | In-memory spans with per-user and per-model counts and cost |
+| Drift | `drift.py` | PSI between baseline and current prompt-bucket distributions; above 0.2 counts as drift |
+| Alerting | `alerts.py` | Fires on any PII-leak or toxicity score above threshold |
+
+The demo (`python -m llm_obs`) injects a 1% PII-leak regression and shows the
+alert firing.
+
+## Target production architecture
+
+The original brief ([`design/capstone-spec.md`](design/capstone-spec.md)) calls
+for a production stack. This repo stands in for its pieces as follows:
+
+![Target architecture](assets/obs-plane.svg)
+
+| Target component | Stand-in here | Status |
+|---|---|---|
+| OpenTelemetry Collector with tail sampling | `dashboard` ingest + `pipeline/sampler.py` | Partial: not connected |
+| ClickHouse (spans), Postgres (metadata), S3 (archive) | In-memory ring buffer | Not started |
+| DeepEval / RAGAS / LLM-judge eval jobs | `pipeline/evals.py` heuristics | Heuristic only |
+| PSI/KL drift on prompt embeddings | `pipeline/drift.py` on prompt hashes | Heuristic only |
+| Prometheus → Alertmanager → Slack/PagerDuty | `pipeline/alerts.py` | Console output only |
+| Next.js 15 + Recharts UI | `dashboard/public` single-page app | Done, without framework |
+
+Suggested next steps, in order of value:
+
+1. Persist spans (SQLite or ClickHouse) behind the `ObservabilityStore` interface.
+2. Run the pipeline's evals and alerts on spans the dashboard ingests, and show
+   eval scores and alerts in the web app.
+3. Add authentication before exposing the server beyond localhost.

@@ -1,0 +1,136 @@
+# HTTP API reference
+
+The dashboard server listens on `http://localhost:8011` by default. All request
+and response bodies are JSON unless noted otherwise.
+
+## Ingest
+
+### `POST /trace` and `POST /v1/traces`
+
+Both paths accept the same payloads:
+
+- **A flat span**, or an array of flat spans:
+
+  ```json
+  {
+    "trace_id": "5b8efff798038103d269b633813fc60c",
+    "span_id": "eee19b7ec3c1b174",
+    "parent_span_id": "a1b2c3d4e5f60718",
+    "name": "chat gpt-4o-mini",
+    "start_time_unix_nano": 1731000000000000000,
+    "end_time_unix_nano": 1731000000900000000,
+    "status": "OK",
+    "attributes": {
+      "gen_ai.system": "openai",
+      "gen_ai.request.model": "gpt-4o-mini",
+      "gen_ai.usage.input_tokens": 120,
+      "gen_ai.usage.output_tokens": 40
+    }
+  }
+  ```
+
+- **An OTLP/HTTP JSON export request** (`{"resourceSpans": [...]}`), which is
+  what OpenTelemetry SDKs send. Resource attributes are merged into each span.
+  `status.code` of `2` (or `"STATUS_CODE_ERROR"`) marks the span as an error.
+
+**Validation.** A span is rejected and counted under `rejected` if any of these
+is true:
+
+- `gen_ai.system` or `gen_ai.request.model` is missing or not a string
+- the timestamps are not numbers, or the end is before the start
+- a token count is negative or not a whole number
+
+IDs that aren't valid hex are replaced with random ones. A non-string
+`gen_ai.response.model` is dropped, and `gen_ai.operation.name` defaults to
+`chat`.
+
+| Status | Body |
+|---|---|
+| `202` | `{"status": "accepted", "counters": {"accepted", "rejected", "held"}}` |
+| `400` | `{"error": "bad_request", "message": "..."}`: the body is not valid JSON |
+| `413` | `{"error": "payload_too_large"}`: the body is over 5 MB |
+
+Protobuf-encoded OTLP is not supported.
+
+## Web app API
+
+### `GET /api/overview?window=15m|1h|6h|24h`
+
+Metrics for spans that ended inside the window (default `1h`).
+
+```json
+{
+  "nowMs": 1800000000000,
+  "windowMs": 3600000,
+  "counters": { "accepted": 1200, "rejected": 0, "held": 1200 },
+  "summary": {
+    "spans": 1200, "errors": 36, "errorRate": 0.03, "costUsd": 26.04,
+    "inputTokens": 2597800, "outputTokens": 600386,
+    "p50LatencyMs": 1360.5, "p95LatencyMs": 2522.15
+  },
+  "series": [
+    { "t": 1799996400000, "count": 20, "errors": 1, "costUsd": 0.43,
+      "p50LatencyMs": 1300, "p95LatencyMs": 2100 }
+  ],
+  "models": [ { "model": "gpt-4o-mini", "count": 240, "...": "see /api/models" } ]
+}
+```
+
+`series` always has 60 equal-width buckets covering the window, including empty
+ones. `t` is the bucket start in Unix milliseconds.
+
+### `GET /api/models`
+
+Per-model roll-ups across every span held in memory.
+
+```json
+{
+  "models": [
+    {
+      "model": "claude-opus-4-7", "count": 240, "errors": 8, "errorRate": 0.0333,
+      "inputTokens": 519040, "outputTokens": 121468, "costUsd": 16.88,
+      "p50LatencyMs": 1283, "p95LatencyMs": 2103, "p99LatencyMs": 2184,
+      "price": { "input": 15, "output": 75 }
+    }
+  ],
+  "pricing": { "gpt-4o-mini": { "input": 0.15, "output": 0.6 } }
+}
+```
+
+`price` is USD per million tokens, or `null` for models that aren't in the price
+list.
+
+### `GET /api/spans`
+
+Spans held in memory, newest first.
+
+| Query | Meaning |
+|---|---|
+| `model` | exact model name |
+| `status` | `OK` or `ERROR` |
+| `q` | substring of the trace ID or span ID, or of the name (case-insensitive) |
+| `limit` | 1–500, default 50 |
+| `offset` | default 0 |
+
+Returns `{ "total": 1388, "items": [span, ...] }`. Each item is the stored span
+plus `model`, `latency_ms` and `cost_usd`.
+
+### `GET /api/traces/:traceId`
+
+Every held span with that trace ID, in start-time order: `{ "trace_id", "spans": [...] }`.
+Returns `404 {"error": "not_found"}` if none are held.
+
+### `DELETE /api/spans`
+
+Deletes every held span and resets the counters. This can't be undone. Returns
+`{"status": "cleared", "counters": {...}}`.
+
+## Other endpoints
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/` | the web app |
+| GET | `/assets/{index.html,app.js,charts.js,styles.css}` | web app files; anything else is `404` |
+| GET | `/dashboard` | server-rendered HTML table, no JavaScript needed |
+| GET | `/dashboard.json` | `{ counters, models }` across all held spans |
+| GET | `/healthz` | `{ "status": "ok", counters }`, for liveness probes |
