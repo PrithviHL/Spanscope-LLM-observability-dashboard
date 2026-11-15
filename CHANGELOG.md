@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Public demo deployment: a Render Blueprint (`render.yaml`), `DEMO_MODE`
+  (clearing spans returns 403 and the Reset card is hidden),
+  `INGEST_RATE_LIMIT_PER_MIN` (per-IP ingest limit, `429` when exceeded),
+  `LIVE_TRAFFIC_PER_MIN` (background synthetic traffic) and `GET /api/config`.
+
 ### Fixed
 
 - CI: the Python 3.9 job failed because `ubuntu-latest` (now Ubuntu 26.04)

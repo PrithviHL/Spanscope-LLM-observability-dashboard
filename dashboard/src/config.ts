@@ -8,6 +8,12 @@ export type Config = {
   seedSpans: number;
   /** Ring buffer capacity: the newest N spans are kept in memory. */
   capacity: number;
+  /** Public demo: disables destructive endpoints such as clearing all spans. */
+  demo: boolean;
+  /** Synthetic spans generated per minute in the background (0 disables it). */
+  liveTrafficPerMin: number;
+  /** Ingest requests allowed per client IP per minute (0 disables the limit). */
+  ingestRateLimitPerMin: number;
 };
 
 function intFrom(value: string | undefined, fallback: number, name: string, min = 0): number {
@@ -29,5 +35,12 @@ export function loadConfig(
     port: intFrom(env["PORT"], 8011, "PORT", 1),
     seedSpans: intFrom(env["SEED_SPANS"], 1200, "SEED_SPANS"),
     capacity: intFrom(env["BUFFER_CAPACITY"], 10_000, "BUFFER_CAPACITY", 1),
+    demo: env["DEMO_MODE"] === "1",
+    liveTrafficPerMin: intFrom(env["LIVE_TRAFFIC_PER_MIN"], 0, "LIVE_TRAFFIC_PER_MIN"),
+    ingestRateLimitPerMin: intFrom(
+      env["INGEST_RATE_LIMIT_PER_MIN"],
+      0,
+      "INGEST_RATE_LIMIT_PER_MIN",
+    ),
   };
 }

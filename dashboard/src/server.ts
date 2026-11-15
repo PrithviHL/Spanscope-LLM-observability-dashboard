@@ -11,6 +11,7 @@ import {
   type SpanQuery,
 } from "./analytics.js";
 import { PRICE_USD_PER_MTOKEN } from "./pricing.js";
+import { RateLimiter } from "./rate-limit.js";
 import { rollUpByModel } from "./rollup.js";
 import { renderDashboardHtml } from "./legacy-dashboard.js";
 import type { ObservabilityStore } from "./store.js";
@@ -44,9 +45,26 @@ function parseWindowMs(w: string | undefined): number {
   return WINDOWS_MS[w ?? "1h"] ?? WINDOWS_MS["1h"]!;
 }
 
+export type AppOptions = {
+  /** Public demo: refuse destructive requests such as clearing all spans. */
+  demo?: boolean;
+  /** Ingest requests allowed per client IP per minute (0 or unset: no limit). */
+  ingestRateLimitPerMin?: number;
+};
+
+/** Client IP as seen behind a reverse proxy (first X-Forwarded-For entry). */
+function clientKey(c: Context): string {
+  const fwd = c.req.header("x-forwarded-for");
+  return fwd?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "unknown";
+}
+
 /** Build the HTTP app: ingest endpoints, the web app, its JSON API and health checks. */
-export function buildApp(store: ObservabilityStore): Hono {
+export function buildApp(store: ObservabilityStore, options: AppOptions = {}): Hono {
   const app = new Hono();
+  const demo = options.demo ?? false;
+  const limiter = options.ingestRateLimitPerMin
+    ? new RateLimiter(options.ingestRateLimitPerMin)
+    : null;
 
   const limit = bodyLimit({
     maxSize: MAX_BODY_BYTES,
@@ -54,6 +72,12 @@ export function buildApp(store: ObservabilityStore): Hono {
   });
 
   const ingestHandler = async (c: Context) => {
+    if (limiter && !limiter.allow(clientKey(c))) {
+      return c.json(
+        { error: "rate_limited", message: "Too many requests, try again in a minute" },
+        429,
+      );
+    }
     try {
       const body = await c.req.json();
       const counters = store.ingest(body);
@@ -123,7 +147,17 @@ export function buildApp(store: ObservabilityStore): Hono {
     return c.json({ trace_id: id, spans });
   });
 
-  app.delete("/api/spans", (c) => c.json({ status: "cleared", counters: store.clear() }));
+  app.get("/api/config", (c) => c.json({ demo }));
+
+  app.delete("/api/spans", (c) => {
+    if (demo) {
+      return c.json(
+        { error: "forbidden", message: "Clearing is disabled in the public demo" },
+        403,
+      );
+    }
+    return c.json({ status: "cleared", counters: store.clear() });
+  });
 
   // ---- legacy server-rendered table ---------------------------------------
   app.get("/dashboard", (c) => c.html(renderDashboardHtml(store)));

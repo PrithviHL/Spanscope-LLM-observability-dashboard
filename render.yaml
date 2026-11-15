@@ -1,0 +1,28 @@
+# Render Blueprint: deploys the dashboard as a public demo.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: llm-observability-dashboard
+    runtime: node
+    plan: free
+    rootDir: dashboard
+    # tsx (a dev dependency) runs the TypeScript server, so install dev deps too.
+    buildCommand: npm ci --include=dev
+    startCommand: npm run serve
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Render routes traffic to $PORT (set automatically); listen on all interfaces.
+      - key: HOST
+        value: 0.0.0.0
+      # Public demo: visitors can't clear the data for everyone else.
+      - key: DEMO_MODE
+        value: "1"
+      # Keep the charts moving with a trickle of synthetic traffic.
+      - key: LIVE_TRAFFIC_PER_MIN
+        value: "30"
+      # Cap ingest requests per visitor IP.
+      - key: INGEST_RATE_LIMIT_PER_MIN
+        value: "60"

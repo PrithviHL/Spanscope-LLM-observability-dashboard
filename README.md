@@ -14,6 +14,15 @@ a reference pipeline for tail sampling, evals, drift detection and alerting.
 | [`pipeline/`](pipeline/) | Tail sampler, eval spans (faithfulness, toxicity, PII), PSI drift detector and alerting, with a demo that catches an injected PII leak | Python 3.9+, standard library only |
 | [`docs/`](docs/) | Architecture, API reference and the original design brief | Markdown |
 
+## Deploy a public demo
+
+The repo includes a [Render](https://render.com) Blueprint ([`render.yaml`](render.yaml)).
+In Render, choose **New → Blueprint**, select this repository and deploy. It runs
+the web app in public demo mode: clearing data is disabled, ingest is rate
+limited per visitor, and a trickle of synthetic traffic keeps the charts live.
+On the free plan the service sleeps after 15 minutes idle and takes about a
+minute to wake.
+
 ## Quick start
 
 **Web app** (needs Node.js 20 or newer):

@@ -757,3 +757,7 @@ pre.snippet {
     font-size: 22px;
   }
 }
+
+[hidden] {
+  display: none !important;
+}

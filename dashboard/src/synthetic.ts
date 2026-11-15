@@ -61,3 +61,50 @@ export function generateSyntheticSpans(cfg: SyntheticConfig): GenAISpan[] {
   }
   return out;
 }
+
+/**
+ * Randomised spans that end "now", for the background traffic that keeps a
+ * public demo's charts moving. Latency is log-normal-ish with a long tail.
+ */
+export function generateLiveSpans(
+  count: number,
+  models: string[] = DEMO_MODELS,
+  nowMs = Date.now(),
+  errorRate = 0.03,
+  random: () => number = Math.random,
+): GenAISpan[] {
+  if (models.length === 0) throw new Error("generateLiveSpans: models must not be empty");
+  const hex = (len: number) =>
+    Array.from({ length: len }, () => Math.floor(random() * 16).toString(16)).join("");
+  const out: GenAISpan[] = [];
+  for (let i = 0; i < count; i++) {
+    const model = models[Math.floor(random() * models.length)] ?? models[0]!;
+    const isError = random() < errorRate;
+    const latencyMs = Math.round(
+      900 * Math.exp((random() - 0.5) * 1.2 + (random() < 0.05 ? 1 : 0)),
+    );
+    const endNs = (nowMs - random() * 1000) * 1e6;
+    out.push({
+      trace_id: hex(32),
+      span_id: hex(16),
+      name: "chat.completion",
+      start_time_unix_nano: endNs - latencyMs * 1e6,
+      end_time_unix_nano: endNs,
+      status: isError ? "ERROR" : "OK",
+      attributes: {
+        "gen_ai.system": model.startsWith("gpt")
+          ? "openai"
+          : model.startsWith("claude")
+            ? "anthropic"
+            : "google",
+        "gen_ai.request.model": model,
+        "gen_ai.response.model": model,
+        "gen_ai.operation.name": "chat",
+        "gen_ai.usage.input_tokens": 100 + Math.floor(random() * 3000),
+        "gen_ai.usage.output_tokens": isError ? 0 : 40 + Math.floor(random() * 700),
+        "gen_ai.response.finish_reasons": [isError ? "error" : "stop"],
+      },
+    });
+  }
+  return out;
+}

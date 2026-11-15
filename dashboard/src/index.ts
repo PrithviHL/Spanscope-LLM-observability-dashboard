@@ -14,7 +14,7 @@ import { loadConfig } from "./config.js";
 import { rollUpByModel } from "./rollup.js";
 import { buildApp } from "./server.js";
 import { ObservabilityStore } from "./store.js";
-import { DEMO_MODELS, generateSyntheticSpans } from "./synthetic.js";
+import { DEMO_MODELS, generateLiveSpans, generateSyntheticSpans } from "./synthetic.js";
 import type { ModelRollup } from "./types.js";
 
 function reportRollups(rollups: ModelRollup[]): void {
@@ -54,13 +54,35 @@ function main(): void {
     return;
   }
 
-  const app = buildApp(store);
+  const app = buildApp(store, {
+    demo: config.demo,
+    ingestRateLimitPerMin: config.ingestRateLimitPerMin,
+  });
   const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
     console.log(`[obs] web app on http://${config.host}:${info.port}`);
     console.log(`[obs] OTLP/HTTP JSON ingest at http://${config.host}:${info.port}/v1/traces`);
   });
 
+  if (config.demo) console.log("[obs] public demo mode: clearing spans is disabled");
+
+  // Background traffic keeps the charts moving on a public demo. Spread the
+  // per-minute budget over 5-second ticks.
+  let traffic: NodeJS.Timeout | undefined;
+  if (config.liveTrafficPerMin > 0) {
+    const perTick = config.liveTrafficPerMin / 12;
+    let carry = 0;
+    traffic = setInterval(() => {
+      carry += perTick;
+      const n = Math.floor(carry);
+      carry -= n;
+      if (n > 0) store.ingest(generateLiveSpans(n));
+    }, 5000);
+    traffic.unref();
+    console.log(`[obs] live demo traffic: ${config.liveTrafficPerMin} spans/min`);
+  }
+
   const shutdown = (signal: string) => {
+    if (traffic) clearInterval(traffic);
     console.log(`[obs] ${signal} received, shutting down`);
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 2000).unref();

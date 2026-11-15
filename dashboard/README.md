@@ -35,13 +35,16 @@ chart has something to show.
 
 ## Configuration
 
-| Variable          | Default     | Meaning                                                       |
-| ----------------- | ----------- | ------------------------------------------------------------- |
-| `PORT`            | `8011`      | HTTP port                                                     |
-| `HOST`            | `localhost` | Interface to bind; use `0.0.0.0` to accept remote connections |
-| `SEED_SPANS`      | `1200`      | Synthetic spans to load on start-up; `0` starts empty         |
-| `BUFFER_CAPACITY` | `10000`     | Spans held in memory; the oldest are evicted first            |
-| `SERVE`           | unset       | `1` is the same as passing `--serve`                          |
+| Variable                    | Default     | Meaning                                                       |
+| --------------------------- | ----------- | ------------------------------------------------------------- |
+| `PORT`                      | `8011`      | HTTP port                                                     |
+| `HOST`                      | `localhost` | Interface to bind; use `0.0.0.0` to accept remote connections |
+| `SEED_SPANS`                | `1200`      | Synthetic spans to load on start-up; `0` starts empty         |
+| `BUFFER_CAPACITY`           | `10000`     | Spans held in memory; the oldest are evicted first            |
+| `DEMO_MODE`                 | unset       | `1` disables clearing spans (`DELETE /api/spans` returns 403) |
+| `LIVE_TRAFFIC_PER_MIN`      | `0`         | Synthetic spans generated per minute in the background        |
+| `INGEST_RATE_LIMIT_PER_MIN` | `0`         | Ingest requests per client IP per minute; `0` means no limit  |
+| `SERVE`                     | unset       | `1` is the same as passing `--serve`                          |
 
 Invalid values stop the server at start-up with a clear message, for example
 `PORT must be an integer >= 1, got "abc"`.

@@ -10,6 +10,9 @@ test("loadConfig uses defaults when nothing is set", () => {
     port: 8011,
     seedSpans: 1200,
     capacity: 10_000,
+    demo: false,
+    liveTrafficPerMin: 0,
+    ingestRateLimitPerMin: 0,
   });
 });
 
@@ -20,6 +23,14 @@ test("loadConfig reads the --serve flag and environment variables", () => {
   assert.equal(cfg.seedSpans, 0);
   assert.equal(cfg.host, "0.0.0.0");
   assert.equal(loadConfig([], { SERVE: "1" }).serve, true);
+  const pub = loadConfig([], {
+    DEMO_MODE: "1",
+    LIVE_TRAFFIC_PER_MIN: "20",
+    INGEST_RATE_LIMIT_PER_MIN: "60",
+  });
+  assert.equal(pub.demo, true);
+  assert.equal(pub.liveTrafficPerMin, 20);
+  assert.equal(pub.ingestRateLimitPerMin, 60);
 });
 
 test("loadConfig rejects invalid numbers", () => {

@@ -607,7 +607,7 @@ OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
         <div class="form-actions" style="margin-top:8px"><button class="btn" data-copy="snip-curl">Copy</button></div>
       </section>
 
-      <section class="card card-pad" style="grid-column:1/-1">
+      <section class="card card-pad" style="grid-column:1/-1" id="reset-card" hidden>
         <div class="card-head"><div><h2>Reset</h2><div class="sub">Delete every span held in memory and reset the counters. This can't be undone.</div></div>
           <span class="spacer"></span><button class="btn danger" id="clear">Clear all spans</button></div>
       </section>
@@ -700,6 +700,15 @@ OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
       }
     }),
   );
+
+  // The public demo refuses DELETE /api/spans, so only offer Reset when allowed.
+  api("/api/config")
+    .then((cfg) => {
+      if (!cfg.demo && $("#reset-card")) $("#reset-card").hidden = false;
+    })
+    .catch(() => {
+      // Older server without /api/config: keep the Reset card hidden.
+    });
 
   $("#clear").addEventListener("click", async () => {
     if (!confirm("Delete all spans held in memory? This can't be undone.")) return;
