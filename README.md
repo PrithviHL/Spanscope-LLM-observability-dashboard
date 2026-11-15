@@ -6,6 +6,9 @@ a reference pipeline for tail sampling, evals, drift detection and alerting.
 
 [![CI](https://github.com/PrithviHL/llm-observability-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/PrithviHL/llm-observability-dashboard/actions/workflows/ci.yml)
 
+**[▶ Live demo](https://llm-observability-dashboard-mthw.onrender.com/)**: runs on
+Render's free plan, so the first visit may take up to a minute while it wakes.
+
 ## What's inside
 
 | Directory | What it is | Stack |
