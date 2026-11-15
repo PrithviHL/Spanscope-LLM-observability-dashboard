@@ -11,7 +11,7 @@ import {
   type ClickHouseConfig,
 } from "../src/clickhouse.js";
 import { MemoryRepository } from "../src/repository.js";
-import { ObservabilityStore } from "../src/store.js";
+import { ObservabilityStore, parseIncoming } from "../src/store.js";
 import { DEMO_MODELS, generateSyntheticSpans } from "../src/synthetic.js";
 
 const url = process.env["CLICKHOUSE_TEST_URL"];
@@ -28,12 +28,18 @@ const cfg: ClickHouseConfig = {
 let ch: ClickHouseRepository;
 let mem: MemoryRepository;
 let now: number;
+let sampleTraceId = "";
 
 before(async () => {
   if (skip) return;
   ch = await ClickHouseRepository.connect(cfg);
   mem = new MemoryRepository(new ObservabilityStore(10_000));
-  const spans = generateSyntheticSpans({ spans: 600, errorRate: 0.05, models: DEMO_MODELS });
+  // Validate once so both backends get identical spans: the validator replaces
+  // the generator's non-hex IDs with random ones, which would otherwise differ.
+  const { spans } = parseIncoming(
+    generateSyntheticSpans({ spans: 600, errorRate: 0.05, models: DEMO_MODELS }),
+  );
+  sampleTraceId = spans[42]!.trace_id;
   now = Date.now() + 1000;
   await ch.ingest(spans);
   await mem.ingest(spans);
@@ -68,7 +74,8 @@ test("ClickHouse and memory agree on filtered, paginated span lists", { skip }, 
     { limit: 25, offset: 50 },
     { model: "gpt-5.4", limit: 10 },
     { status: "ERROR" as const, limit: 50 },
-    { q: "trace-0000001", limit: 50 },
+    { q: "chat", limit: 50 },
+    { q: sampleTraceId.slice(0, 12).toUpperCase(), limit: 50 }, // case-insensitive ID search
   ]) {
     const a = await ch.spans(q);
     const b = await mem.spans(q);
