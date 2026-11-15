@@ -2,7 +2,7 @@
   "name": "spanscope",
   "private": true,
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Spanscope: self-hosted LLM observability dashboard with OpenTelemetry GenAI span ingest, live web app and JSON API.",
   "engines": {
     "node": ">=20"

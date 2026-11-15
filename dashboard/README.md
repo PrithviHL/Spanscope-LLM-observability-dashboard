@@ -62,7 +62,7 @@ Invalid values stop the server at start-up with a clear message, for example
 ## ClickHouse storage (optional)
 
 By default spans live in memory. To keep them across restarts and query them
-with SQL, run ClickHouse with Docker and switch the backend:
+with SQL:
 
 ```bash
 docker compose up -d          # from the repository root
@@ -72,48 +72,18 @@ docker compose up -d          # from the repository root
 cd dashboard && STORAGE=clickhouse npm run serve
 ```
 
-On start-up Spanscope creates the `spanscope` database and `spans` table if
-they don't exist. Demo spans are only seeded into an empty table, so restarts
-don't duplicate them. The footer of the web app shows which storage is in use,
-and `/healthz` returns `503` if ClickHouse is unreachable.
-
-To look at the data directly:
-
-```bash
-docker compose exec clickhouse clickhouse-client --query "SELECT model, count(), quantileExactInclusive(0.95)(latency_ms) FROM spanscope.spans GROUP BY model"
-```
-
-The `docker-compose.yml` setup is for local development: the `default` user
-has no password and the port is bound to localhost. For a shared or hosted
-ClickHouse, set `CLICKHOUSE_URL`, `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD`.
-
-To run the integration tests against it:
-
-```bash
-CLICKHOUSE_TEST_URL=http://localhost:8123 npx tsx --test tests/clickhouse.integration.test.ts
-```
+The [ClickHouse guide](../docs/clickhouse.md) covers setup, stopping and
+deleting data, example SQL queries, the table design and the integration
+tests.
 
 ## Sign in with GitHub (optional)
 
-With sign-in on, anyone can still view the dashboard, but simulating incidents,
-sending data and creating ingest keys need a GitHub sign-in. There is no user
-database: sessions and ingest keys are signed tokens, so this works on hosts
-without persistent storage.
-
-1. Create a GitHub OAuth app at
-   [github.com/settings/applications/new](https://github.com/settings/applications/new).
-   Set the **Authorization callback URL** to `<your origin>/auth/github/callback`,
-   for example `http://localhost:8011/auth/github/callback` for local use.
-   An OAuth app has one callback URL, so use separate apps for local and hosted.
-2. Start the server with the app's values and a random session secret:
-
-```bash
-GITHUB_CLIENT_ID=... GITHUB_CLIENT_SECRET=... SESSION_SECRET=$(openssl rand -hex 32) npm run serve
-```
-
-Keep `SESSION_SECRET` the same across restarts, or everyone is signed out. Never
-commit these values. Details of the endpoints and ingest keys are in the
-[API reference](../docs/api.md#sign-in-optional).
+Off unless `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` and `SESSION_SECRET` are
+set. When on, viewing stays public, but simulating incidents, sending data and
+clearing need a signed-in user or a personal ingest key. It's stateless (signed
+cookies and keys, no user database). The public demo leaves it off on purpose.
+Setup is in the [deployment guide](../docs/deployment.md#sign-in-with-github-optional);
+endpoints and ingest keys are in the [API reference](../docs/api.md#sign-in-optional).
 
 ## Web app
 

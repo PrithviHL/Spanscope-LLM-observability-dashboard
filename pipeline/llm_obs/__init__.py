@@ -13,7 +13,7 @@ from .sampler import TailSampler
 from .spans import Span, Trace
 from .store import SpanStore
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "PSI_ALERT_THRESHOLD",

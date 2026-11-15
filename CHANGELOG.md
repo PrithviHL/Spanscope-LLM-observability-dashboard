@@ -6,7 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
 ### Added
+
+- Documentation: a [user guide](docs/user-guide.md), [deployment
+  guide](docs/deployment.md), [ClickHouse guide](docs/clickhouse.md) and a
+  record of [design decisions](docs/decisions.md); README with screenshots,
+  a feature list and a 30-second walkthrough.
 
 - Optional **Sign in with GitHub** (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
   `SESSION_SECRET`, `PUBLIC_URL`). Viewing stays public; simulating incidents,
