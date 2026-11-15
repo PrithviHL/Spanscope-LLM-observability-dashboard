@@ -6,7 +6,7 @@ Spanscope is self-hosted observability for LLM applications. It ingests
 OpenTelemetry GenAI spans, shows latency, errors and cost per model in a live
 web app, and includes a reference pipeline for tail sampling, evals, drift detection and alerting.
 
-[![CI](https://github.com/PrithviHL/llm-observability-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/PrithviHL/llm-observability-dashboard/actions/workflows/ci.yml)
+[![CI](https://github.com/PrithviHL/Spanscope-LLM-observability-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/PrithviHL/Spanscope-LLM-observability-dashboard/actions/workflows/ci.yml)
 
 **[▶ Live demo](https://llm-observability-dashboard-mthw.onrender.com/)**: runs on
 Render's free plan, so the first visit may take up to a minute while it wakes.
