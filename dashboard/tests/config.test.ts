@@ -5,6 +5,7 @@ import { DEMO_MODELS, generateSyntheticSpans } from "../src/synthetic.js";
 
 test("loadConfig uses defaults when nothing is set", () => {
   assert.deepEqual(loadConfig([], {}), {
+    auth: null,
     storage: "memory",
     clickhouse: {
       url: "http://localhost:8123",

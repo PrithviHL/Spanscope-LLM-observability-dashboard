@@ -51,6 +51,10 @@ chart has something to show.
 | `CLICKHOUSE_PASSWORD`       | empty                   | ClickHouse password                                           |
 | `CLICKHOUSE_DATABASE`       | `spanscope`             | Database, created if missing                                  |
 | `CLICKHOUSE_TTL_DAYS`       | `30`                    | ClickHouse deletes spans older than this                      |
+| `GITHUB_CLIENT_ID`          | unset                   | GitHub OAuth app client ID; enables sign-in (see below)       |
+| `GITHUB_CLIENT_SECRET`      | unset                   | GitHub OAuth app client secret                                |
+| `SESSION_SECRET`            | unset                   | 32+ random characters; signs sessions and ingest keys         |
+| `PUBLIC_URL`                | from request            | Public origin for the OAuth callback, e.g. `https://x.com`    |
 
 Invalid values stop the server at start-up with a clear message, for example
 `PORT must be an integer >= 1, got "abc"`.
@@ -89,6 +93,28 @@ To run the integration tests against it:
 CLICKHOUSE_TEST_URL=http://localhost:8123 npx tsx --test tests/clickhouse.integration.test.ts
 ```
 
+## Sign in with GitHub (optional)
+
+With sign-in on, anyone can still view the dashboard, but simulating incidents,
+sending data and creating ingest keys need a GitHub sign-in. There is no user
+database: sessions and ingest keys are signed tokens, so this works on hosts
+without persistent storage.
+
+1. Create a GitHub OAuth app at
+   [github.com/settings/applications/new](https://github.com/settings/applications/new).
+   Set the **Authorization callback URL** to `<your origin>/auth/github/callback`,
+   for example `http://localhost:8011/auth/github/callback` for local use.
+   An OAuth app has one callback URL, so use separate apps for local and hosted.
+2. Start the server with the app's values and a random session secret:
+
+```bash
+GITHUB_CLIENT_ID=... GITHUB_CLIENT_SECRET=... SESSION_SECRET=$(openssl rand -hex 32) npm run serve
+```
+
+Keep `SESSION_SECRET` the same across restarts, or everyone is signed out. Never
+commit these values. Details of the endpoints and ingest keys are in the
+[API reference](../docs/api.md#sign-in-optional).
+
 ## Web app
 
 | Page      | What it shows                                                                                                                                           |
@@ -123,6 +149,7 @@ is rejected and counted. See [`docs/api.md`](../docs/api.md) for every endpoint.
 | `src/server.ts`           | HTTP routes: ingest, web app assets, JSON API, health                    |
 | `src/normalise.ts`        | Validate and normalise one incoming span                                 |
 | `src/otlp.ts`             | Flatten OTLP/HTTP JSON export requests into spans                        |
+| `src/auth.ts`             | Optional GitHub sign-in: OAuth flow, signed sessions and ingest keys     |
 | `src/repository.ts`       | `SpanRepository` interface and the in-memory `MemoryRepository`          |
 | `src/clickhouse.ts`       | Optional ClickHouse backend: HTTP client, schema, SQL queries            |
 | `src/store.ts`            | `ObservabilityStore` (ingest, counters, snapshot, clear), payload parser |
@@ -140,5 +167,7 @@ is rejected and counted. See [`docs/api.md`](../docs/api.md) for every endpoint.
 
 - With the default `memory` storage, spans are lost on restart. Use
   `STORAGE=clickhouse` to persist them.
-- There is no authentication. Keep `HOST=localhost` unless the network is trusted.
+- Without the GitHub settings there is no sign-in, so anyone who can reach the
+  server can send data. Keep `HOST=localhost` unless the network is trusted, or
+  enable sign-in.
 - Costs are estimates from the list prices in `src/pricing.ts`. Unknown models show $0.

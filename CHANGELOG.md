@@ -6,14 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-
-- A span sent without timestamps was stored at 1 January 1970, so it never
-  appeared on any chart (and ClickHouse expired it immediately). It is now
-  stamped with the time it was received.
-
 ### Added
 
+- Optional **Sign in with GitHub** (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
+  `SESSION_SECRET`, `PUBLIC_URL`). Viewing stays public; simulating incidents,
+  sending data and clearing need a signed-in user. Stateless: HMAC-signed
+  session cookies (HttpOnly, SameSite=Lax, Secure on HTTPS) and a signed OAuth
+  `state`; no GitHub scopes requested and no access token stored.
+- Personal **ingest keys** (`POST /api/keys`, `Authorization: Bearer ssk_…`)
+  so apps and OpenTelemetry exporters can send data when sign-in is on.
+- Web app: Sign in button and account menu, sign-in prompts on gated actions,
+  an ingest key generator that fills in the setup snippets, palette commands.
+- `GET /api/me`. Writes return `401` with a sign-in hint when sign-in is on.
+- Render Blueprint: `PUBLIC_URL`, generated `SESSION_SECRET`, and GitHub
+  values to fill in on the dashboard.
 - Optional **ClickHouse storage** (`STORAGE=clickhouse`): spans persist across
   restarts in a day-partitioned `MergeTree` table with a TTL, and the overview,
   model roll-ups, span search and trace lookups run as SQL inside ClickHouse.
@@ -40,29 +46,26 @@ All notable changes to this project are documented here. The format follows
 - Provider colour dots, inline cost and latency bars, highlighted new rows,
   skeleton loaders, a status filter toggle and copy buttons in the span detail.
 - Respects `prefers-reduced-motion`.
+- Public demo deployment: a Render Blueprint (`render.yaml`), `DEMO_MODE`
+  (clearing spans returns 403 and the Reset card is hidden),
+  `INGEST_RATE_LIMIT_PER_MIN` (per-IP ingest limit, `429` when exceeded),
+  `LIVE_TRAFFIC_PER_MIN` (background synthetic traffic) and `GET /api/config`.
 
 ### Changed
 
 - The project is now called **Spanscope** (web app title and header, package
   names and docs). The Python import name stays `llm_obs`, and the GitHub repo
   and Render URL are unchanged.
-
-### Added
-
-- Public demo deployment: a Render Blueprint (`render.yaml`), `DEMO_MODE`
-  (clearing spans returns 403 and the Reset card is hidden),
-  `INGEST_RATE_LIMIT_PER_MIN` (per-IP ingest limit, `429` when exceeded),
-  `LIVE_TRAFFIC_PER_MIN` (background synthetic traffic) and `GET /api/config`.
+- CI actions upgraded to v7 (checkout, setup-node, setup-python), which run on
+  Node.js 24 and clear the Node.js 20 deprecation warnings.
 
 ### Fixed
 
+- A span sent without timestamps was stored at 1 January 1970, so it never
+  appeared on any chart (and ClickHouse expired it immediately). It is now
+  stamped with the time it was received.
 - CI: the Python 3.9 job failed because `ubuntu-latest` (now Ubuntu 26.04)
   has no Python 3.9 build. Python jobs now run on Ubuntu 24.04.
-
-### Changed
-
-- CI actions upgraded to v7 (checkout, setup-node, setup-python), which run on
-  Node.js 24 and clear the Node.js 20 deprecation warnings.
 
 ## [0.2.0] - 2026-11-14
 

@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { SpanQuery } from "./analytics.js";
+import type { GitHubAuth } from "./auth.js";
 import { renderDashboardHtml } from "./legacy-dashboard.js";
 import { PRICE_USD_PER_MTOKEN } from "./pricing.js";
 import { RateLimiter } from "./rate-limit.js";
@@ -43,7 +44,19 @@ export type AppOptions = {
   demo?: boolean;
   /** Ingest requests allowed per client IP per minute (0 or unset: no limit). */
   ingestRateLimitPerMin?: number;
+  /** GitHub sign-in. When set, writes need a session or an ingest key; reads stay public. */
+  auth?: GitHubAuth | null;
 };
+
+const unauthorized = (c: Context) =>
+  c.json(
+    {
+      error: "unauthorized",
+      message: "Sign in with GitHub, or send an ingest key as 'Authorization: Bearer ssk_…'",
+      login: "/auth/github/login",
+    },
+    401,
+  );
 
 /** Client IP as seen behind a reverse proxy (first X-Forwarded-For entry). */
 function clientKey(c: Context): string {
@@ -59,6 +72,9 @@ export function buildApp(
   const repo = source instanceof ObservabilityStore ? new MemoryRepository(source) : source;
   const app = new Hono();
   const demo = options.demo ?? false;
+  const auth = options.auth ?? null;
+  /** Who may write: anyone when sign-in is off, otherwise a session user or ingest-key owner. */
+  const writer = (c: Context) => (auth ? (auth.sessionUser(c) ?? auth.keyUser(c)) : true);
   const limiter = options.ingestRateLimitPerMin
     ? new RateLimiter(options.ingestRateLimitPerMin)
     : null;
@@ -75,6 +91,7 @@ export function buildApp(
         429,
       );
     }
+    if (!writer(c)) return unauthorized(c);
     let body: unknown;
     try {
       body = await c.req.json();
@@ -139,6 +156,20 @@ export function buildApp(
 
   app.get("/api/config", (c) => c.json({ demo, storage: repo.kind }));
 
+  // ---- sign-in ------------------------------------------------------------
+  app.get("/api/me", (c) =>
+    c.json({ authEnabled: !!auth, user: auth ? auth.sessionUser(c) : null }),
+  );
+  if (auth) {
+    auth.mount(app);
+    // Personal ingest key for external apps (OTel exporters can't send cookies).
+    app.post("/api/keys", (c) => {
+      const user = auth.sessionUser(c);
+      if (!user) return unauthorized(c);
+      return c.json(auth.issueIngestKey(user), 201);
+    });
+  }
+
   app.delete("/api/spans", async (c) => {
     if (demo) {
       return c.json(
@@ -146,6 +177,7 @@ export function buildApp(
         403,
       );
     }
+    if (!writer(c)) return unauthorized(c);
     return c.json({ status: "cleared", counters: await repo.clear() });
   });
 

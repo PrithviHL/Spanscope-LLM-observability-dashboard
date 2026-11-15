@@ -1,7 +1,16 @@
 /** Runtime configuration, read from CLI flags and environment variables. */
 export type StorageKind = "memory" | "clickhouse";
 
+export type AuthSettings = {
+  clientId: string;
+  clientSecret: string;
+  sessionSecret: string;
+  publicUrl?: string;
+};
+
 export type Config = {
+  /** GitHub sign-in; null when GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET aren't set. */
+  auth: AuthSettings | null;
   /** Where spans live: an in-memory ring buffer (default) or ClickHouse. */
   storage: StorageKind;
   clickhouse: {
@@ -36,6 +45,26 @@ function intFrom(value: string | undefined, fallback: number, name: string, min 
   return n;
 }
 
+function authFrom(env: NodeJS.ProcessEnv): AuthSettings | null {
+  const clientId = env["GITHUB_CLIENT_ID"] || "";
+  const clientSecret = env["GITHUB_CLIENT_SECRET"] || "";
+  const sessionSecret = env["SESSION_SECRET"] || "";
+  if (!clientId && !clientSecret) return null;
+  if (!clientId || !clientSecret) {
+    throw new Error("set both GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET to enable sign-in");
+  }
+  if (sessionSecret.length < 32) {
+    throw new Error("SESSION_SECRET must be at least 32 characters when sign-in is enabled");
+  }
+  const publicUrl = env["PUBLIC_URL"] || "";
+  if (publicUrl && !/^https?:\/\/[^/]+\/?$/.test(publicUrl)) {
+    throw new Error(`PUBLIC_URL must be an origin like https://example.com, got "${publicUrl}"`);
+  }
+  const auth: AuthSettings = { clientId, clientSecret, sessionSecret };
+  if (publicUrl) auth.publicUrl = publicUrl;
+  return auth;
+}
+
 export function loadConfig(
   argv: readonly string[] = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env,
@@ -45,6 +74,7 @@ export function loadConfig(
     throw new Error(`STORAGE must be "memory" or "clickhouse", got "${env["STORAGE"]}"`);
   }
   return {
+    auth: authFrom(env),
     storage,
     clickhouse: {
       url: env["CLICKHOUSE_URL"] || "http://localhost:8123",

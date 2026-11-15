@@ -54,6 +54,7 @@ IDs that aren't valid hex are replaced with random ones. A non-string
 |---|---|
 | `202` | `{"status": "accepted", "counters": {"accepted", "rejected", "held"}}` |
 | `400` | `{"error": "bad_request", "message": "..."}`: the body is not valid JSON |
+| `401` | `{"error": "unauthorized", ...}`: sign-in is enabled and the request has no valid session or ingest key |
 | `413` | `{"error": "payload_too_large"}`: the body is over 5 MB |
 | `503` | `{"error": "storage_unavailable", ...}`: the storage backend (ClickHouse) rejected the write or is unreachable |
 | `429` | `{"error": "rate_limited", ...}`: more than `INGEST_RATE_LIMIT_PER_MIN` requests from this IP in the last minute |
@@ -138,6 +139,40 @@ Deletes every held span and resets the counters. This can't be undone. Returns
 
 `{ "demo": true | false, "storage": "memory" | "clickhouse" }`, so the web app
 can hide controls the server refuses and show which storage is in use.
+
+## Sign-in (optional)
+
+Enabled when `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` and `SESSION_SECRET` are
+set. Reads (`GET`) stay public. Writes (`POST /trace`, `POST /v1/traces`,
+`DELETE /api/spans`) then need either a signed-in browser session or an ingest
+key, and otherwise return:
+
+```json
+401 { "error": "unauthorized", "message": "...", "login": "/auth/github/login" }
+```
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/auth/github/login?next=/#/send` | Redirects to GitHub. `next` must be a relative path; anything else becomes `/` |
+| GET | `/auth/github/callback` | GitHub returns here; checks the signed `state`, sets the session cookie, redirects to `next` |
+| POST | `/auth/logout` | Clears the session cookie (`204`) |
+| GET | `/api/me` | `{ "authEnabled": bool, "user": { id, login, name, avatar } \| null }` |
+| POST | `/api/keys` | Signed-in users only: `201 { "key": "ssk_…", "expiresAt": "…" }` |
+
+**Ingest keys** let apps send data without a browser session. Send the key as
+`Authorization: Bearer ssk_…`, or with OpenTelemetry:
+
+```bash
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20ssk_…
+```
+
+Keys are valid for 90 days. Sessions last 7 days. Both are HMAC-signed with
+`SESSION_SECRET` and aren't stored anywhere, so changing `SESSION_SECRET` signs
+everyone out and revokes every key. No GitHub scopes are requested, and the
+GitHub access token is discarded after reading the public profile.
+
+`GET /api/me` always exists; with sign-in off it returns
+`{ "authEnabled": false, "user": null }`.
 
 ## Other endpoints
 

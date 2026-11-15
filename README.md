@@ -89,5 +89,7 @@ shows what is a stand-in and what's next.
 Spans live in memory by default. An optional ClickHouse backend
 (`STORAGE=clickhouse`, with a `docker-compose.yml` for local use) persists them
 and runs the analytics as SQL; see the
-[dashboard README](dashboard/README.md#clickhouse-storage-optional). The server
-has no authentication, so run it on localhost or a trusted network.
+[dashboard README](dashboard/README.md#clickhouse-storage-optional). Optional
+**Sign in with GitHub** keeps viewing public but requires sign-in (or a personal
+ingest key) to send data; without it, run the server on localhost or a trusted
+network.

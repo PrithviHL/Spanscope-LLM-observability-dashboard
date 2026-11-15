@@ -98,7 +98,11 @@ for a production stack. This repo stands in for its pieces as follows:
 
 Suggested next steps, in order of value:
 
-1. Persist spans (SQLite or ClickHouse) behind the `ObservabilityStore` interface.
-2. Run the pipeline's evals and alerts on spans the dashboard ingests, and show
+1. Run the pipeline's evals and alerts on spans the dashboard ingests, and show
    eval scores and alerts in the web app.
-3. Add authentication before exposing the server beyond localhost.
+2. Per-user data: spans are currently shared by everyone who can sign in. Tag
+   spans with the ingest key's owner and filter by it.
+3. Revocable ingest keys, which needs a small metadata store (Postgres).
+
+Done since the first version: ClickHouse persistence behind `SpanRepository`,
+and optional GitHub sign-in with signed sessions and ingest keys (`auth.ts`).

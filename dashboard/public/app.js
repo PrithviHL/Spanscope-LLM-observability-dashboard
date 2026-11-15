@@ -222,6 +222,68 @@ function revealIn(view) {
 }
 
 // ---------------------------------------------------------------------------
+// sign-in (GitHub). Viewing is public; actions need a signed-in user when the
+// server has sign-in enabled.
+// ---------------------------------------------------------------------------
+
+const session = { authEnabled: false, user: null };
+const canWrite = () => !session.authEnabled || !!session.user;
+
+function signIn() {
+  location.href = `/auth/github/login?next=${encodeURIComponent(`/${location.hash}`)}`;
+}
+
+async function signOut() {
+  await fetch("/auth/logout", { method: "POST" }).catch(() => {});
+  session.user = null;
+  renderAccount();
+  toast("Signed out");
+  route();
+}
+
+/** Label for a gated action button: the action itself, or a sign-in prompt. */
+const actionLabel = (icon, label, gated = `Sign in to ${label.toLowerCase()}`) =>
+  canWrite() ? `${icon}${label}` : `${ICON.github}${gated}`;
+
+function renderAccount() {
+  const box = $("#account");
+  if (!session.authEnabled) {
+    box.innerHTML = "";
+    return;
+  }
+  if (!session.user) {
+    box.innerHTML = `<button class="btn gh-btn" id="signin">${ICON.github}<span>Sign in</span></button>`;
+    $("#signin").addEventListener("click", signIn);
+    return;
+  }
+  const u = session.user;
+  const avatar = u.avatar
+    ? `<img src="${esc(u.avatar)}" alt="" width="24" height="24" referrerpolicy="no-referrer">`
+    : `<span class="avatar-fallback">${esc(u.login.slice(0, 1).toUpperCase())}</span>`;
+  box.innerHTML = `
+    <button class="account-btn" id="account-btn" aria-haspopup="menu" aria-expanded="false" title="Signed in as @${esc(u.login)}">${avatar}<span class="account-name">${esc(u.login)}</span></button>
+    <div class="account-menu" id="account-menu" role="menu" hidden>
+      <div class="account-who"><b>${esc(u.name)}</b><span>@${esc(u.login)}</span></div>
+      <a role="menuitem" href="#/send">${ICON.send}Ingest key &amp; send data</a>
+      <button role="menuitem" id="signout">${ICON.x}Sign out</button>
+    </div>`;
+  const btn = $("#account-btn");
+  const menu = $("#account-menu");
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+  };
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setOpen(menu.hidden);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest?.("#account")) setOpen(false);
+  });
+  $("#signout").addEventListener("click", signOut);
+}
+
+// ---------------------------------------------------------------------------
 // live polling, theme, incident simulation
 // ---------------------------------------------------------------------------
 
@@ -295,6 +357,7 @@ const INCIDENT_MODELS = [
 
 /** Inject a burst of slow, failing calls on one model so every chart reacts. */
 async function simulateIncident(btn) {
+  if (!canWrite()) return signIn();
   const model = INCIDENT_MODELS[Math.floor(Math.random() * INCIDENT_MODELS.length)];
   const system = providerOf(model);
   const now = Date.now();
@@ -472,7 +535,7 @@ const heroHtml = () => `
       <h1>See inside every <span class="gradient-text">LLM call</span>.</h1>
       <p>Spanscope turns OpenTelemetry traces from AI apps into live latency, error and cost insight for every model. New requests arrive every few seconds. Go ahead and break something.</p>
       <div class="hero-actions">
-        <button class="btn primary lg" id="hero-incident">${ICON.zap}Simulate an incident</button>
+        <button class="btn primary lg" id="hero-incident">${actionLabel(ICON.zap, "Simulate an incident")}</button>
         <a class="btn lg" href="#/traces">${ICON.list}Explore traces</a>
         <span class="hero-hint">or press <kbd>${isMac ? "⌘" : "Ctrl "}K</kbd> for everything</span>
       </div>
@@ -1001,8 +1064,13 @@ async function pageSend(view) {
         <span class="f-icon">${svgIcon('<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>', 20)}</span>
         <div style="flex:1;min-width:220px"><h2>Simulate an incident</h2>
           <div class="sub">Sends 150 slow, failing calls for one random model over the last two minutes, then takes you to the Overview to watch the spike.</div></div>
-        <button class="btn primary lg" id="incident">${ICON.zap}Break something</button>
+        <button class="btn primary lg" id="incident">${actionLabel(ICON.zap, "Break something", "Sign in to break something")}</button>
       </section>
+      ${
+        canWrite()
+          ? ""
+          : `<section class="card card-pad span-all signin-card"><span>${ICON.github}</span><div style="flex:1;min-width:220px"><h2>Sign in to send data</h2><div class="sub">Anyone can explore the dashboard. Signing in with GitHub lets you simulate incidents, send test spans, generate traffic and get an ingest key for your own app. Spanscope only reads your public profile.</div></div><button class="btn primary" id="signin-send">${ICON.github}Sign in with GitHub</button></section>`
+      }
 
       <section class="card card-pad">
         <div class="card-head"><div><h2>Send a test span</h2><div class="sub">Posts one span to <code>/trace</code>, timestamped now.</div></div></div>
@@ -1020,7 +1088,7 @@ async function pageSend(view) {
           <div class="field"><label for="s-in">Input tokens</label><input type="number" id="s-in" value="420" min="0" required></div>
           <div class="field"><label for="s-out">Output tokens</label><input type="number" id="s-out" value="180" min="0" required></div>
         </form>
-        <div class="form-actions"><button class="btn primary" form="one" type="submit">${ICON.send}Send span</button><span class="notice" id="one-msg"></span></div>
+        <div class="form-actions"><button class="btn primary" form="one" type="submit">${actionLabel(ICON.send, "Send span", "Sign in to send")}</button><span class="notice" id="one-msg"></span></div>
       </section>
 
       <section class="card card-pad">
@@ -1031,17 +1099,28 @@ async function pageSend(view) {
           <div class="field"><label for="g-spread">Spread over last (minutes)</label><input type="number" id="g-spread" value="10" min="0" max="1440" required></div>
           <div class="field"><label for="g-lat">Typical latency (ms)</label><input type="number" id="g-lat" value="1200" min="1" required></div>
         </form>
-        <div class="form-actions"><button class="btn primary" form="gen" type="submit">${ICON.sparkle}Generate</button><span class="notice" id="gen-msg"></span></div>
+        <div class="form-actions"><button class="btn primary" form="gen" type="submit">${actionLabel(ICON.sparkle, "Generate", "Sign in to generate")}</button><span class="notice" id="gen-msg"></span></div>
       </section>
 
       <section class="card card-pad span-all">
         <div class="card-head"><div><h2>Connect your app</h2><div class="sub">Point any OpenTelemetry SDK at this server using the OTLP/HTTP <b>JSON</b> exporter (protobuf isn't supported).</div></div></div>
-        <div class="section-title" style="margin-top:4px">Environment variables</div>
+        ${
+          session.authEnabled
+            ? `<div class="section-title" style="margin-top:4px">Your ingest key</div>
+        ${
+          session.user
+            ? `<p class="notice">Apps send this key instead of signing in. It's valid for 90 days and is shown only once, so store it like a password.</p>
+        <div class="form-actions" style="margin-top:8px"><button class="btn primary" id="make-key">${ICON.sparkle}Create ingest key</button><span class="notice" id="key-msg"></span></div>`
+            : `<p class="notice">Sign in to create a key that lets your own app send traces here.</p>`
+        }`
+            : ""
+        }
+        <div class="section-title"${session.authEnabled ? "" : ' style="margin-top:4px"'}>Environment variables</div>
         <pre class="snippet" id="snip-env">OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${origin}/v1/traces
-OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
+OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json${session.authEnabled ? `\nOTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<span class="key-slot">YOUR_INGEST_KEY</span>` : ""}</pre>
         <div class="form-actions" style="margin-top:8px"><button class="btn" data-copy="snip-env">${ICON.copy}Copy</button></div>
         <div class="section-title">Or send a flat span with curl</div>
-        <pre class="snippet" id="snip-curl">curl -X POST ${origin}/trace -H 'content-type: application/json' \\
+        <pre class="snippet" id="snip-curl">curl -X POST ${origin}/trace -H 'content-type: application/json' \\${session.authEnabled ? `\n  -H 'authorization: Bearer <span class="key-slot">YOUR_INGEST_KEY</span>' \\` : ""}
   -d '{"start_time_unix_nano":${Date.now()}000000,"end_time_unix_nano":${Date.now() + 900}000000,"attributes":{"gen_ai.system":"openai","gen_ai.request.model":"gpt-4o-mini","gen_ai.usage.input_tokens":120,"gen_ai.usage.output_tokens":40}}'</pre>
         <div class="form-actions" style="margin-top:8px"><button class="btn" data-copy="snip-curl">${ICON.copy}Copy</button></div>
       </section>
@@ -1054,6 +1133,23 @@ OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
   if (!quiet) revealIn(view);
 
   $("#incident").addEventListener("click", (e) => simulateIncident(e.currentTarget));
+  $("#signin-send")?.addEventListener("click", signIn);
+  $("#make-key")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const { key, expiresAt } = await api("/api/keys", { method: "POST" });
+      view.querySelectorAll(".key-slot").forEach((n) => (n.textContent = key));
+      $("#key-msg").className = "notice ok";
+      $("#key-msg").textContent =
+        `Key created, valid until ${new Date(expiresAt).toLocaleDateString()}. It's now in the snippets below. Copy it before leaving this page.`;
+      toast("Ingest key created");
+    } catch (err) {
+      $("#key-msg").className = "notice err";
+      $("#key-msg").textContent = `Failed: ${err.message}`;
+      btn.disabled = false;
+    }
+  });
 
   $("#s-sys").addEventListener("change", (e) => {
     if (PROVIDERS[e.target.value]) $("#s-model").value = PROVIDERS[e.target.value];
@@ -1061,6 +1157,7 @@ OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
 
   $("#one").addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!canWrite()) return signIn();
     const msg = $("#one-msg");
     try {
       const span = makeSpan({
@@ -1087,6 +1184,7 @@ OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
 
   $("#gen").addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!canWrite()) return signIn();
     const msg = $("#gen-msg");
     const n = Math.min(5000, Math.max(1, Number($("#g-n").value)));
     const errRate = Number($("#g-err").value) / 100;
@@ -1232,6 +1330,18 @@ function paletteCommands(q) {
         else go("overview");
       },
     },
+    ...(session.authEnabled
+      ? [
+          session.user
+            ? {
+                group: "Account",
+                label: `Sign out (@${session.user.login})`,
+                icon: ICON.x,
+                run: signOut,
+              }
+            : { group: "Account", label: "Sign in with GitHub", icon: ICON.github, run: signIn },
+        ]
+      : []),
     {
       group: "Links",
       label: "View source on GitHub",
@@ -1431,4 +1541,13 @@ window.addEventListener("hashchange", () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && live.refresh && !live.paused) live.refresh().catch(() => {});
 });
-route();
+// Learn whether sign-in is on (and who is signed in) before the first render.
+api("/api/me")
+  .then((me) => Object.assign(session, me))
+  .catch(() => {
+    /* older server or offline: behave as if sign-in is off */
+  })
+  .finally(() => {
+    renderAccount();
+    route();
+  });

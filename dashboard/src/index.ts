@@ -10,6 +10,7 @@
  */
 
 import { serve } from "@hono/node-server";
+import { GitHubAuth } from "./auth.js";
 import { ClickHouseRepository } from "./clickhouse.js";
 import { loadConfig, type Config } from "./config.js";
 import { MemoryRepository, type SpanRepository } from "./repository.js";
@@ -70,7 +71,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  const auth = config.auth ? new GitHubAuth(config.auth) : null;
+  console.log(
+    auth
+      ? "[spanscope] sign-in: GitHub (viewing is public; writes need sign-in or an ingest key)"
+      : "[spanscope] sign-in: off (set GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, SESSION_SECRET to enable)",
+  );
   const app = buildApp(repo, {
+    auth,
     demo: config.demo,
     ingestRateLimitPerMin: config.ingestRateLimitPerMin,
   });

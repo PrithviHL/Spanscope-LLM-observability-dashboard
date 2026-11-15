@@ -1676,6 +1676,118 @@ pre.snippet {
   display: none !important;
 }
 
+/* ---- account / sign-in ------------------------------------------------- */
+.account {
+  position: relative;
+  display: flex;
+}
+.gh-btn {
+  min-height: 32px;
+  padding: 4px 12px;
+  background: var(--text-primary);
+  color: var(--bg);
+  border-color: var(--text-primary);
+}
+.gh-btn:hover {
+  background: var(--text-primary);
+  filter: brightness(1.15);
+}
+.account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px 0 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  cursor: pointer;
+  font-weight: 500;
+}
+.account-btn:hover {
+  border-color: var(--border-strong);
+}
+.account-btn img,
+.avatar-fallback {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 220px;
+  z-index: 15;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+}
+.account-who {
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  display: grid;
+}
+.account-who span {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.account-menu a,
+.account-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.account-menu a:hover,
+.account-menu button:hover {
+  background: var(--surface-2);
+  text-decoration: none;
+}
+.signin-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.signin-card > span:first-child {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--text-primary);
+  color: var(--bg);
+}
+.key-slot {
+  color: var(--accent);
+  font-weight: 500;
+}
+@media (max-width: 600px) {
+  .account-name {
+    display: none;
+  }
+  .account-btn {
+    padding: 0 4px;
+  }
+}
+
 /* Keyboard hints are noise on touch screens. */
 @media (hover: none) {
   .hero-hint {

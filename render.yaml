@@ -26,3 +26,15 @@ services:
       # Cap ingest requests per visitor IP.
       - key: INGEST_RATE_LIMIT_PER_MIN
         value: "60"
+      # ---- Sign in with GitHub (off until both GitHub values are set) ----
+      # Public origin, used for the OAuth callback URL and Secure cookies.
+      - key: PUBLIC_URL
+        value: https://spanscope-llm-observability-dashboard.onrender.com
+      # Signs sessions and ingest keys; Render generates a random value.
+      - key: SESSION_SECRET
+        generateValue: true
+      # From your GitHub OAuth app; set them in the Render dashboard, never in git.
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
