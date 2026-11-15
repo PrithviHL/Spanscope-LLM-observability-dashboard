@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- CI: the Python 3.9 job failed because `ubuntu-latest` (now Ubuntu 26.04)
+  has no Python 3.9 build. Python jobs now run on Ubuntu 24.04.
+
+### Changed
+
+- CI actions upgraded to v7 (checkout, setup-node, setup-python), which run on
+  Node.js 24 and clear the Node.js 20 deprecation warnings.
+
 ## [0.2.0] - 2026-11-14
 
 ### Added
