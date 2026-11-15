@@ -2,6 +2,7 @@
 // Each chart re-renders on container resize and ships a hover tooltip.
 
 const NS = "http://www.w3.org/2000/svg";
+let uid = 0;
 
 function el(tag, attrs = {}, parent) {
   const n = document.createElementNS(NS, tag);
@@ -156,7 +157,11 @@ export function stackedBars(container, opts) {
         const path = top
           ? topRoundedRect(x, y - sh, bw, segH, 3)
           : `M${x},${y - sh}h${bw}v${segH}h${-bw}Z`;
-        if (path) el("path", { d: path, style: `fill:${seg.s.color}` }, bars);
+        if (path) {
+          const attrs = { d: path, style: `fill:${seg.s.color};--i:${i}` };
+          if (opts.animate) attrs.class = "grow-up";
+          el("path", attrs, bars);
+        }
         y -= sh;
       });
     });
@@ -232,7 +237,12 @@ export function lineChart(container, opts) {
       svg,
     );
     const dots = [];
-    series.forEach((s) => {
+    const gradId = `area-${++uid}`;
+    const defs = el("defs", {}, svg);
+    const grad = el("linearGradient", { id: gradId, x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+    el("stop", { offset: "0%", style: `stop-color:${series[0].color};stop-opacity:0.22` }, grad);
+    el("stop", { offset: "100%", style: `stop-color:${series[0].color};stop-opacity:0` }, grad);
+    series.forEach((s, si) => {
       // Break the line where a bucket has no data instead of drawing to zero.
       let d = "";
       let pen = false;
@@ -246,18 +256,26 @@ export function lineChart(container, opts) {
         pen = true;
         last = i;
       });
-      el(
-        "path",
-        {
-          d,
-          fill: "none",
-          style: `stroke:${s.color}`,
-          "stroke-width": 2,
-          "stroke-linejoin": "round",
-          "stroke-linecap": "round",
-        },
-        svg,
-      );
+      if (si === 0) {
+        // Soft area under the first series: each unbroken run becomes a closed shape.
+        const area = d.replace(/M([\d.]+),([\d.-]+)((?:L[\d.]+,[\d.-]+)*)/g, (_m, x0, y0, rest) => {
+          const xs = [...rest.matchAll(/L([\d.]+),/g)].map((r) => r[1]);
+          const xEnd = xs.length ? xs[xs.length - 1] : x0;
+          const base = (m.top + h).toFixed(1);
+          return `M${x0},${base}L${x0},${y0}${rest}L${xEnd},${base}Z`;
+        });
+        el("path", { d: area, fill: `url(#${gradId})`, class: opts.animate ? "fade-in" : "" }, svg);
+      }
+      const lineAttrs = {
+        d,
+        fill: "none",
+        style: `stroke:${s.color}`,
+        "stroke-width": 2,
+        "stroke-linejoin": "round",
+        "stroke-linecap": "round",
+      };
+      if (opts.animate) Object.assign(lineAttrs, { pathLength: 1, class: "draw-line" });
+      el("path", lineAttrs, svg);
       if (last !== null) {
         const lx = xAt(last);
         const ly = yAt(s.value(data[last]));
@@ -269,6 +287,7 @@ export function lineChart(container, opts) {
             r: 3.5,
             style: `fill:${s.color};stroke:var(--surface-1)`,
             "stroke-width": 2,
+            class: opts.animate ? "fade-in" : "",
           },
           svg,
         );
@@ -373,7 +392,13 @@ export function hBars(container, opts) {
       lab.textContent = d.label.length > 22 ? d.label.slice(0, 21) + "…" : d.label;
       const bw = Math.max(d.value > 0 ? 3 : 0, (d.value / max) * w);
       const p = rightRoundedRect(m.left, yMid - bh / 2, bw, bh, 4);
-      if (p) el("path", { d: p, style: `fill:${color}` }, svg);
+      if (p) {
+        el(
+          "path",
+          { d: p, style: `fill:${color};--i:${i}`, class: opts.animate ? "grow-right" : "" },
+          svg,
+        );
+      }
       const val = el("text", { class: "bar-label", x: m.left + bw + 8, y: yMid + 4 }, svg);
       val.textContent = format(d.value);
       const hit = el(
@@ -390,5 +415,52 @@ export function hBars(container, opts) {
       });
       hit.addEventListener("mouseleave", () => tip.hide());
     });
+  });
+}
+
+/**
+ * Tiny area sparkline for KPI tiles. No axes; one hover-free trend line.
+ * values: number[] (gaps as null), color: CSS color.
+ */
+export function sparkline(container, values, color, { animate = false, height = 44 } = {}) {
+  return responsive(container, (width) => {
+    container.innerHTML = "";
+    const pts = values.map((v, i) => [i, v]).filter(([, v]) => v !== null && Number.isFinite(v));
+    if (pts.length < 2) return;
+    const vals = pts.map(([, v]) => v);
+    const hi = Math.max(...vals) || 1;
+    const minV = Math.min(...vals);
+    // Zoom into the band only when it carries real variation; otherwise anchor at zero.
+    const lo = hi - minV > hi * 0.25 ? minV * 0.9 : 0;
+    const pad = 5;
+    const xAt = (i) => (i / (values.length - 1)) * width;
+    const yAt = (v) => pad + (1 - (v - lo) / (hi - lo || 1)) * (height - pad * 2);
+    const line = pts
+      .map(([i, v], k) => `${k ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`)
+      .join("");
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    const area = `${line}L${xAt(last[0]).toFixed(1)},${height}L${xAt(first[0]).toFixed(1)},${height}Z`;
+    const svg = el("svg", {
+      viewBox: `0 0 ${width} ${height}`,
+      preserveAspectRatio: "none",
+      "aria-hidden": "true",
+    });
+    const id = `spark-${++uid}`;
+    const grad = el("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 }, el("defs", {}, svg));
+    el("stop", { offset: "0%", style: `stop-color:${color};stop-opacity:0.25` }, grad);
+    el("stop", { offset: "100%", style: `stop-color:${color};stop-opacity:0` }, grad);
+    el("path", { d: area, fill: `url(#${id})`, class: animate ? "fade-in" : "" }, svg);
+    const lineAttrs = {
+      d: line,
+      fill: "none",
+      style: `stroke:${color}`,
+      "stroke-width": 1.75,
+      "stroke-linejoin": "round",
+      "vector-effect": "non-scaling-stroke",
+    };
+    if (animate) Object.assign(lineAttrs, { pathLength: 1, class: "draw-line" });
+    el("path", lineAttrs, svg);
+    container.appendChild(svg);
   });
 }

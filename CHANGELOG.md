@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Redesigned web app: Inter typography, glass header, soft background glow,
+  staggered entrance animations and charts that draw in on first load; full
+  light and dark themes with a circular theme-switch transition.
+- Overview: a welcome banner with a one-click **Simulate an incident** button,
+  KPI tiles with count-up numbers and sparklines, and a live stream of the
+  newest requests.
+- Command palette (⌘K / Ctrl+K) for navigation, actions, model and trace
+  search, plus keyboard shortcuts (`g o/m/t/s`, `/`, `i`, `p`, `t`).
+- Provider colour dots, inline cost and latency bars, highlighted new rows,
+  skeleton loaders, a status filter toggle and copy buttons in the span detail.
+- Respects `prefers-reduced-motion`.
+
 ### Changed
 
 - The project is now called **Spanscope** (web app title and header, package
