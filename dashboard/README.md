@@ -1,4 +1,4 @@
-# Dashboard: ingest server and web app (TypeScript)
+# Spanscope dashboard: ingest server and web app (TypeScript)
 
 A [Hono](https://hono.dev) server on Node.js that accepts OpenTelemetry GenAI
 spans, keeps the newest 10,000 in memory, and serves a live web app and JSON

@@ -26,7 +26,7 @@ export function renderDashboardHtml(store: ObservabilityStore): string {
   return [
     "<!doctype html>",
     "<html><head><meta charset='utf-8'><meta http-equiv='refresh' content='5'>",
-    "<title>LLM observability dashboard</title>",
+    "<title>Spanscope</title>",
     "<style>",
     "body{font-family:system-ui,sans-serif;margin:2rem;max-width:1100px;}",
     "table{border-collapse:collapse;width:100%;}",
@@ -35,7 +35,7 @@ export function renderDashboardHtml(store: ObservabilityStore): string {
     ".stats{display:flex;gap:1.5rem;margin-bottom:1rem;}",
     ".stat{background:#fafafa;border:1px solid #ddd;padding:.6rem 1rem;border-radius:6px;}",
     "</style></head><body>",
-    "<h1>LLM observability dashboard</h1>",
+    "<h1>Spanscope</h1>",
     "<div class='stats'>",
     `<div class='stat'><b>${counters.accepted}</b> spans accepted</div>`,
     `<div class='stat'>${counters.held} in ring buffer</div>`,

@@ -1,8 +1,10 @@
-# LLM Observability & Eval Dashboard
+# Spanscope
 
-Self-hosted observability for LLM applications. It ingests OpenTelemetry GenAI
-spans, shows latency, errors and cost per model in a live web app, and includes
-a reference pipeline for tail sampling, evals, drift detection and alerting.
+**Latency, errors and cost for your LLM apps, span by span.**
+
+Spanscope is self-hosted observability for LLM applications. It ingests
+OpenTelemetry GenAI spans, shows latency, errors and cost per model in a live
+web app, and includes a reference pipeline for tail sampling, evals, drift detection and alerting.
 
 [![CI](https://github.com/PrithviHL/llm-observability-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/PrithviHL/llm-observability-dashboard/actions/workflows/ci.yml)
 

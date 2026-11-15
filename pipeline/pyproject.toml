@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "llm-obs"
+name = "spanscope-pipeline"
 version = "0.2.0"
 description = "Tail sampling, eval spans, drift detection and alerting for LLM traces (stdlib only)."
 readme = "README.md"

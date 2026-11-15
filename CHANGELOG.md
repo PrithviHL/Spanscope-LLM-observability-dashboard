@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The project is now called **Spanscope** (web app title and header, package
+  names and docs). The Python import name stays `llm_obs`, and the GitHub repo
+  and Render URL are unchanged.
+
 ### Added
 
 - Public demo deployment: a Render Blueprint (`render.yaml`), `DEMO_MODE`

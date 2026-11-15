@@ -1,4 +1,4 @@
-"""LLM observability pipeline: tail sampling, eval spans, drift detection and alerting.
+"""Spanscope pipeline: tail sampling, eval spans, drift detection and alerting.
 
 A dependency-free reference implementation of the processing stages that sit
 between span ingest and the dashboard. Run the end-to-end demo with::

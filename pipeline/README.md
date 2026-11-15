@@ -1,4 +1,4 @@
-# llm_obs: trace processing pipeline (Python)
+# Spanscope pipeline: trace processing in Python (`llm_obs`)
 
 A dependency-free reference implementation of the stages that sit between span
 ingest and the dashboard: tail sampling, evals written back as child spans,
