@@ -67,11 +67,17 @@ jobs:
           npx tsx src/index.ts --serve > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8099/healthz > /dev/null && break; sleep 1; done
           cat server.log
-          curl -sf localhost:8099/healthz | tee /dev/stderr | grep -q '"storage":"clickhouse"'
-          curl -sf "localhost:8099/api/overview?window=1h" | grep -q '"spans":300'
-          curl -sf -X POST localhost:8099/trace -H 'content-type: application/json' \
-            -d '{"attributes":{"gen_ai.system":"openai","gen_ai.request.model":"gpt-4o-mini"}}' | grep -q accepted
-          curl -sf localhost:8099/healthz | grep -q '"held":301'
+          # Capture responses first: "curl | grep -q" can fail under pipefail
+          # when grep exits early and closes the pipe.
+          health=$(curl -sf localhost:8099/healthz); echo "$health"
+          grep -q '"storage":"clickhouse"' <<< "$health"
+          overview=$(curl -sf "localhost:8099/api/overview?window=1h")
+          grep -q '"spans":300' <<< "$overview"
+          ingest=$(curl -sf -X POST localhost:8099/trace -H 'content-type: application/json' \
+            -d '{"attributes":{"gen_ai.system":"openai","gen_ai.request.model":"gpt-4o-mini"}}')
+          grep -q accepted <<< "$ingest"
+          health=$(curl -sf localhost:8099/healthz); echo "$health"
+          grep -q '"held":301' <<< "$health"
 
   pipeline:
     name: Pipeline (Python ${{ matrix.python }})
