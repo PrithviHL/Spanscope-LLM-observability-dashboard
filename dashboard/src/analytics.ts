@@ -87,7 +87,10 @@ export function timeseries(
       t: start + i * bucketMs,
       count: g.length,
       errors: g.filter((s) => s.status === "ERROR").length,
-      costUsd: round(g.reduce((acc, s) => acc + spanCostUsd(s), 0), 4),
+      costUsd: round(
+        g.reduce((acc, s) => acc + spanCostUsd(s), 0),
+        4,
+      ),
       p50LatencyMs: round(percentile(lat, 0.5)),
       p95LatencyMs: round(percentile(lat, 0.95)),
     };
@@ -120,7 +123,12 @@ export function querySpans(
   const filtered = spans.filter((s) => {
     if (query.model && spanModel(s) !== query.model) return false;
     if (query.status && s.status !== query.status) return false;
-    if (q && !s.trace_id.includes(q) && !s.span_id.includes(q) && !s.name.toLowerCase().includes(q)) {
+    if (
+      q &&
+      !s.trace_id.includes(q) &&
+      !s.span_id.includes(q) &&
+      !s.name.toLowerCase().includes(q)
+    ) {
       return false;
     }
     return true;

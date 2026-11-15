@@ -6,16 +6,32 @@ import { stackedBars, lineChart, hBars, fmtTime } from "./charts.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) =>
-  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
 const fmtInt = (n) => Number(n || 0).toLocaleString();
-const fmtUsd = (n) => (n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`);
+const fmtUsd = (n) =>
+  n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
 const fmtMs = (n) => (n >= 1000 ? `${(n / 1000).toFixed(2)} s` : `${Math.round(n)} ms`);
 const fmtPct = (r) => `${(r * 100).toFixed(r && r < 0.01 ? 2 : 1)}%`;
 const shortId = (id) => (id ? `${id.slice(0, 8)}…` : "");
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const store = {
-  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  get(k, d) {
+    try {
+      return localStorage.getItem(k) ?? d;
+    } catch {
+      return d;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+      /* storage unavailable (private mode): preference just isn't saved */
+    }
+  },
 };
 
 async function api(path, init) {
@@ -40,7 +56,9 @@ function statusBadge(s) {
 }
 
 const hex = (bytes) =>
-  Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) => b.toString(16).padStart(2, "0")).join("");
+  Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
 
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "");
@@ -127,7 +145,9 @@ async function openSpan(span) {
   let trace = [span];
   try {
     trace = (await api(`/api/traces/${encodeURIComponent(span.trace_id)}`)).spans;
-  } catch {}
+  } catch {
+    // trace lookup failed: fall back to showing just this span
+  }
   const a = span.attributes || {};
   const t0 = Math.min(...trace.map((s) => s.start_time_unix_nano));
   const t1 = Math.max(...trace.map((s) => s.end_time_unix_nano));
@@ -167,7 +187,12 @@ async function openSpan(span) {
 // pages
 // ---------------------------------------------------------------------------
 
-const WINDOWS = [["15m", "15 min"], ["1h", "1 hour"], ["6h", "6 hours"], ["24h", "24 hours"]];
+const WINDOWS = [
+  ["15m", "15 min"],
+  ["1h", "1 hour"],
+  ["6h", "6 hours"],
+  ["24h", "24 hours"],
+];
 
 async function pageOverview(view) {
   let windowKey = store.get("obs-window", "1h");
@@ -217,7 +242,9 @@ async function pageOverview(view) {
     b.addEventListener("click", () => {
       windowKey = b.dataset.w;
       store.set("obs-window", windowKey);
-      view.querySelectorAll("[data-w]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      view
+        .querySelectorAll("[data-w]")
+        .forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       last = "";
       refresh();
     }),
@@ -245,7 +272,8 @@ async function pageOverview(view) {
       <div class="card card-pad kpi"><div class="label">Spend</div><div class="value">${fmtUsd(s.costUsd)}</div><div class="hint">${fmtInt(s.inputTokens + s.outputTokens)} tokens</div></div>
       <div class="card card-pad kpi"><div class="label">p95 latency</div><div class="value">${fmtMs(s.p95LatencyMs)}</div><div class="hint">p50 ${fmtMs(s.p50LatencyMs)}</div></div>`;
     const bucketMin = data.series.length > 1 ? (data.series[1].t - data.series[0].t) / 60000 : 1;
-    $("#req-sub").textContent = `Spans per ${bucketMin >= 1 ? `${+bucketMin.toFixed(1)}-minute` : `${Math.round(bucketMin * 60)}-second`} bucket`;
+    $("#req-sub").textContent =
+      `Spans per ${bucketMin >= 1 ? `${+bucketMin.toFixed(1)}-minute` : `${Math.round(bucketMin * 60)}-second`} bucket`;
 
     disposers.forEach((d) => d());
     const blue = css("--series-1");
@@ -260,7 +288,8 @@ async function pageOverview(view) {
           { label: "Errors", color: red, value: (d) => d.errors },
         ],
         yFormat: (v) => fmtInt(v),
-        extraRows: (d) => `<div class="tt-row" style="color:var(--text-muted)">cost<b>${fmtUsd(d.costUsd)}</b></div>`,
+        extraRows: (d) =>
+          `<div class="tt-row" style="color:var(--text-muted)">cost<b>${fmtUsd(d.costUsd)}</b></div>`,
         title: (d) => `${fmtTime(d.t)} – ${fmtTime(d.t + bucketMin * 60000)}`,
       }),
       lineChart($("#c-lat"), {
@@ -319,13 +348,17 @@ async function pageModels(view) {
   let rows = [];
   const render = () => {
     const sorted = [...rows].sort((a, b) => {
-      const va = sort.key === "price" ? a.price?.input ?? -1 : a[sort.key];
-      const vb = sort.key === "price" ? b.price?.input ?? -1 : b[sort.key];
+      const va = sort.key === "price" ? (a.price?.input ?? -1) : a[sort.key];
+      const vb = sort.key === "price" ? (b.price?.input ?? -1) : b[sort.key];
       return (va > vb ? 1 : va < vb ? -1 : 0) * sort.dir;
     });
     view.querySelectorAll("th[data-k]").forEach((th) => {
-      th.querySelector(".arrow").textContent = th.dataset.k === sort.key ? (sort.dir > 0 ? "▲" : "▼") : "";
-      th.setAttribute("aria-sort", th.dataset.k === sort.key ? (sort.dir > 0 ? "ascending" : "descending") : "none");
+      th.querySelector(".arrow").textContent =
+        th.dataset.k === sort.key ? (sort.dir > 0 ? "▲" : "▼") : "";
+      th.setAttribute(
+        "aria-sort",
+        th.dataset.k === sort.key ? (sort.dir > 0 ? "ascending" : "descending") : "none",
+      );
     });
     $("#m-body").innerHTML = sorted.length
       ? sorted
@@ -349,7 +382,10 @@ async function pageModels(view) {
   };
   view.querySelectorAll("th[data-k]").forEach((th) =>
     th.addEventListener("click", () => {
-      sort = { key: th.dataset.k, dir: sort.key === th.dataset.k ? -sort.dir : th.dataset.k === "model" ? 1 : -1 };
+      sort = {
+        key: th.dataset.k,
+        dir: sort.key === th.dataset.k ? -sort.dir : th.dataset.k === "model" ? 1 : -1,
+      };
       render();
     }),
   );
@@ -382,7 +418,9 @@ async function pageTraces(view, params) {
   let models = [];
   try {
     models = (await api("/api/models")).models.map((m) => m.model).sort();
-  } catch {}
+  } catch {
+    // model list is only for the filter dropdown; the page still works without it
+  }
   if (state.model && !models.includes(state.model)) models.push(state.model);
   view.innerHTML = `
     <div class="page-head">
@@ -439,7 +477,9 @@ async function pageTraces(view, params) {
           .join("")
       : `<tr><td colspan="8" class="empty">No spans match these filters.</td></tr>`;
     const end = Math.min(state.offset + PAGE, data.total);
-    $("#t-count").textContent = data.total ? `${fmtInt(state.offset + 1)}–${fmtInt(end)} of ${fmtInt(data.total)}` : "";
+    $("#t-count").textContent = data.total
+      ? `${fmtInt(state.offset + 1)}–${fmtInt(end)} of ${fmtInt(data.total)}`
+      : "";
     $("#t-prev").disabled = state.offset === 0;
     $("#t-next").disabled = end >= data.total;
   }
@@ -452,15 +492,30 @@ async function pageTraces(view, params) {
     setHashParams("traces", p);
     refresh();
   };
-  $("#f-model").addEventListener("change", (e) => { state.model = e.target.value; apply(); });
-  $("#f-status").addEventListener("change", (e) => { state.status = e.target.value; apply(); });
+  $("#f-model").addEventListener("change", (e) => {
+    state.model = e.target.value;
+    apply();
+  });
+  $("#f-status").addEventListener("change", (e) => {
+    state.status = e.target.value;
+    apply();
+  });
   let deb;
   $("#f-q").addEventListener("input", (e) => {
     clearTimeout(deb);
-    deb = setTimeout(() => { state.q = e.target.value.trim(); apply(); }, 250);
+    deb = setTimeout(() => {
+      state.q = e.target.value.trim();
+      apply();
+    }, 250);
   });
-  $("#t-prev").addEventListener("click", () => { state.offset = Math.max(0, state.offset - PAGE); refresh(); });
-  $("#t-next").addEventListener("click", () => { state.offset += PAGE; refresh(); });
+  $("#t-prev").addEventListener("click", () => {
+    state.offset = Math.max(0, state.offset - PAGE);
+    refresh();
+  });
+  $("#t-next").addEventListener("click", () => {
+    state.offset += PAGE;
+    refresh();
+  });
   $("#t-body").addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-i]");
     if (tr) openSpan(items[Number(tr.dataset.i)]);
@@ -471,7 +526,15 @@ async function pageTraces(view, params) {
 
 const PROVIDERS = { openai: "gpt-4o-mini", anthropic: "claude-opus-4-7", google: "gemini-2-5-pro" };
 
-function makeSpan({ system, model, latencyMs, inputTokens, outputTokens, error, endMs = Date.now() }) {
+function makeSpan({
+  system,
+  model,
+  latencyMs,
+  inputTokens,
+  outputTokens,
+  error,
+  endMs = Date.now(),
+}) {
   const end = endMs * 1e6;
   return {
     trace_id: hex(16),
@@ -506,7 +569,9 @@ async function pageSend(view) {
         <div class="card-head"><div><h2>Send a test span</h2><div class="sub">Posts one span to <code>/trace</code>, timestamped now.</div></div></div>
         <form id="one" class="form-grid">
           <div class="field"><label for="s-sys">Provider</label>
-            <select id="s-sys">${Object.keys(PROVIDERS).map((p) => `<option>${p}</option>`).join("")}<option>other</option></select></div>
+            <select id="s-sys">${Object.keys(PROVIDERS)
+              .map((p) => `<option>${p}</option>`)
+              .join("")}<option>other</option></select></div>
           <div class="field"><label for="s-model">Model</label>
             <input type="text" id="s-model" list="models-dl" value="gpt-4o-mini" required>
             <datalist id="models-dl">${priced.map((m) => `<option value="${esc(m)}">`).join("")}</datalist></div>
@@ -564,7 +629,11 @@ OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
         outputTokens: Number($("#s-out").value),
         error: $("#s-status").value === "ERROR",
       });
-      const r = await api("/trace", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(span) });
+      const r = await api("/trace", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(span),
+      });
       msg.className = "notice ok";
       msg.innerHTML = `Accepted. <a href="#/traces?q=${span.trace_id}">View span →</a> (${fmtInt(r.counters.accepted)} total)`;
     } catch (err) {
@@ -584,9 +653,15 @@ OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
     const now = Date.now();
     const spans = Array.from({ length: n }, () => {
       const model = models[Math.floor(Math.random() * models.length)];
-      const system = model.startsWith("gpt") ? "openai" : model.startsWith("claude") ? "anthropic" : "google";
+      const system = model.startsWith("gpt")
+        ? "openai"
+        : model.startsWith("claude")
+          ? "anthropic"
+          : "google";
       // log-normal-ish latency with a long tail
-      const latencyMs = Math.round(baseLat * Math.exp((Math.random() - 0.5) * 1.2 + (Math.random() < 0.05 ? 1 : 0)));
+      const latencyMs = Math.round(
+        baseLat * Math.exp((Math.random() - 0.5) * 1.2 + (Math.random() < 0.05 ? 1 : 0)),
+      );
       return makeSpan({
         system,
         model,
@@ -600,7 +675,11 @@ OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json</pre>
     const btn = e.submitter;
     btn.disabled = true;
     try {
-      const r = await api("/trace", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(spans) });
+      const r = await api("/trace", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(spans),
+      });
       msg.className = "notice ok";
       msg.innerHTML = `Sent ${fmtInt(n)} spans. <a href="#/overview">See overview →</a> (${fmtInt(r.counters.held)} held)`;
     } catch (err) {
@@ -646,9 +725,13 @@ async function route() {
   const seq = ++routeSeq;
   const { route: name, params } = parseHash();
   const page = PAGES[name] ? name : "overview";
-  document.querySelectorAll(".nav a").forEach((a) =>
-    a.dataset.route === page ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"),
-  );
+  document
+    .querySelectorAll(".nav a")
+    .forEach((a) =>
+      a.dataset.route === page
+        ? a.setAttribute("aria-current", "page")
+        : a.removeAttribute("aria-current"),
+    );
   if (cleanup) cleanup();
   cleanup = null;
   live.start(null);

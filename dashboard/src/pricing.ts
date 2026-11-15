@@ -1,9 +1,6 @@
 import type { GenAISpan } from "./types.js";
 
-export const PRICE_USD_PER_MTOKEN: Record<
-  string,
-  { input: number; output: number }
-> = {
+export const PRICE_USD_PER_MTOKEN: Record<string, { input: number; output: number }> = {
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
   "gpt-5.4": { input: 5, output: 15 },
   "claude-3-5-sonnet": { input: 3, output: 15 },

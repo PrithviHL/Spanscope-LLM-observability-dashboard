@@ -50,13 +50,13 @@ regression so there's something to spot on the latency chart.
 
 ### API used by the web app
 
-| Method | Path | Returns |
-|---|---|---|
-| GET | `/api/overview?window=15m\|1h\|6h\|24h` | summary, 60 time buckets, per-model roll-ups |
-| GET | `/api/models` | per-model roll-ups with error rate and pricing |
-| GET | `/api/spans?model=&status=OK\|ERROR&q=&limit=&offset=` | `{ total, items }`, newest first |
-| GET | `/api/traces/:traceId` | every held span in that trace |
-| DELETE | `/api/spans` | clears the store and counters |
+| Method | Path                                                   | Returns                                        |
+| ------ | ------------------------------------------------------ | ---------------------------------------------- |
+| GET    | `/api/overview?window=15m\|1h\|6h\|24h`                | summary, 60 time buckets, per-model roll-ups   |
+| GET    | `/api/models`                                          | per-model roll-ups with error rate and pricing |
+| GET    | `/api/spans?model=&status=OK\|ERROR&q=&limit=&offset=` | `{ total, items }`, newest first               |
+| GET    | `/api/traces/:traceId`                                 | every held span in that trace                  |
+| DELETE | `/api/spans`                                           | clears the store and counters                  |
 
 ## Send spans
 

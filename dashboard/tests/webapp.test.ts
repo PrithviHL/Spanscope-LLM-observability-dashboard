@@ -2,12 +2,15 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { querySpans, summarize, timeseries } from "../src/analytics.js";
 import { buildApp } from "../src/server.js";
-import { ObservabilityStore } from "../src/spans.js";
+import { ObservabilityStore } from "../src/store.js";
 import type { GenAISpan } from "../src/types.js";
 
 const NOW = 1_800_000_000_000; // fixed "now" in unix ms
 
-function span(i: number, opts: { model?: string; endMs?: number; latencyMs?: number; error?: boolean } = {}): GenAISpan {
+function span(
+  i: number,
+  opts: { model?: string; endMs?: number; latencyMs?: number; error?: boolean } = {},
+): GenAISpan {
   const end = (opts.endMs ?? NOW) * 1e6;
   return {
     trace_id: i.toString(16).padStart(32, "0"),
@@ -54,7 +57,10 @@ test("timeseries puts spans in the right bucket and keeps empty buckets", () => 
   assert.equal(series.at(-1)?.count, 2);
   assert.equal(series.at(-1)?.errors, 1);
   assert.equal(series[0]?.count, 1);
-  assert.equal(series.reduce((a, b) => a + b.count, 0), 3);
+  assert.equal(
+    series.reduce((a, b) => a + b.count, 0),
+    3,
+  );
 });
 
 test("querySpans filters, sorts newest first and paginates", () => {
@@ -64,7 +70,10 @@ test("querySpans filters, sorts newest first and paginates", () => {
     span(3, { endMs: NOW - 2000, model: "a" }),
   ];
   const all = querySpans(spans, {});
-  assert.deepEqual(all.items.map((s) => s.span_id.slice(-1)), ["2", "3", "1"]);
+  assert.deepEqual(
+    all.items.map((s) => s.span_id.slice(-1)),
+    ["2", "3", "1"],
+  );
   assert.equal(querySpans(spans, { model: "a" }).total, 2);
   assert.equal(querySpans(spans, { status: "ERROR" }).items[0]?.model, "b");
   const page = querySpans(spans, { limit: 1, offset: 1 });

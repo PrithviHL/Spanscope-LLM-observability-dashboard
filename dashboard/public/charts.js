@@ -11,7 +11,10 @@ function el(tag, attrs = {}, parent) {
 }
 
 function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
 }
 
 /** "Nice" axis maximum and tick step for 0..max. */
@@ -126,7 +129,11 @@ export function stackedBars(container, opts) {
     const m = { top: 8, right: 8, bottom: 26, left: 40 };
     const w = width - m.left - m.right;
     const h = height - m.top - m.bottom;
-    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": opts.ariaLabel || "" });
+    const svg = el("svg", {
+      viewBox: `0 0 ${width} ${height}`,
+      role: "img",
+      "aria-label": opts.ariaLabel || "",
+    });
     container.prepend(svg);
     const totals = data.map((d) => stacks.reduce((a, s) => a + s.value(d), 0));
     const scale = niceScale(Math.max(...totals));
@@ -155,18 +162,31 @@ export function stackedBars(container, opts) {
     });
     // full-column hit targets (bigger than the marks)
     const hits = el("g", {}, svg);
-    const hover = el("rect", { x: 0, y: m.top, width: slot, height: h, style: "fill:var(--text-primary);opacity:0" }, svg);
+    const hover = el(
+      "rect",
+      { x: 0, y: m.top, width: slot, height: h, style: "fill:var(--text-primary);opacity:0" },
+      svg,
+    );
     hover.style.pointerEvents = "none";
     svg.insertBefore(hover, bars);
     data.forEach((d, i) => {
-      const r = el("rect", { x: m.left + slot * i, y: m.top, width: slot, height: h, fill: "transparent" }, hits);
+      const r = el(
+        "rect",
+        { x: m.left + slot * i, y: m.top, width: slot, height: h, fill: "transparent" },
+        hits,
+      );
       r.addEventListener("mouseenter", () => {
         hover.setAttribute("x", m.left + slot * i);
         hover.style.opacity = "0.05";
-        const rows = stacks.map((s) => ttRow(s.color, s.label, s.format ? s.format(s.value(d)) : s.value(d))).join("");
+        const rows = stacks
+          .map((s) => ttRow(s.color, s.label, s.format ? s.format(s.value(d)) : s.value(d)))
+          .join("");
         const extra = opts.extraRows ? opts.extraRows(d) : "";
-        tip.show(`<div class="tt-title">${esc(opts.title ? opts.title(d) : fmtTime(d.t))}</div>${rows}${extra}`,
-          (xAt(i) / width) * container.clientWidth, m.top);
+        tip.show(
+          `<div class="tt-title">${esc(opts.title ? opts.title(d) : fmtTime(d.t))}</div>${rows}${extra}`,
+          (xAt(i) / width) * container.clientWidth,
+          m.top,
+        );
       });
     });
     hits.addEventListener("mouseleave", () => {
@@ -193,7 +213,11 @@ export function lineChart(container, opts) {
     const m = { top: 10, right: 44, bottom: 26, left: 48 };
     const w = width - m.left - m.right;
     const h = height - m.top - m.bottom;
-    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": opts.ariaLabel || "" });
+    const svg = el("svg", {
+      viewBox: `0 0 ${width} ${height}`,
+      role: "img",
+      "aria-label": opts.ariaLabel || "",
+    });
     container.prepend(svg);
     const maxV = Math.max(...data.filter(has).flatMap((d) => series.map((s) => s.value(d))));
     const scale = niceScale(maxV);
@@ -202,7 +226,11 @@ export function lineChart(container, opts) {
     const xAt = (i) => m.left + step * i;
     const yAt = (v) => m.top + h - (v / scale.max) * h;
     xTimeAxis(svg, m, w, h, data, xAt);
-    const cross = el("line", { class: "crosshair", y1: m.top, y2: m.top + h, x1: 0, x2: 0, opacity: 0 }, svg);
+    const cross = el(
+      "line",
+      { class: "crosshair", y1: m.top, y2: m.top + h, x1: 0, x2: 0, opacity: 0 },
+      svg,
+    );
     const dots = [];
     series.forEach((s) => {
       // Break the line where a bucket has no data instead of drawing to zero.
@@ -210,31 +238,71 @@ export function lineChart(container, opts) {
       let pen = false;
       let last = null;
       data.forEach((pt, i) => {
-        if (!has(pt)) { pen = false; return; }
+        if (!has(pt)) {
+          pen = false;
+          return;
+        }
         d += `${pen ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(s.value(pt)).toFixed(1)}`;
         pen = true;
         last = i;
       });
-      el("path", { d, fill: "none", style: `stroke:${s.color}`, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+      el(
+        "path",
+        {
+          d,
+          fill: "none",
+          style: `stroke:${s.color}`,
+          "stroke-width": 2,
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round",
+        },
+        svg,
+      );
       if (last !== null) {
         const lx = xAt(last);
         const ly = yAt(s.value(data[last]));
-        el("circle", { cx: lx, cy: ly, r: 3.5, style: `fill:${s.color};stroke:var(--surface-1)`, "stroke-width": 2 }, svg);
+        el(
+          "circle",
+          {
+            cx: lx,
+            cy: ly,
+            r: 3.5,
+            style: `fill:${s.color};stroke:var(--surface-1)`,
+            "stroke-width": 2,
+          },
+          svg,
+        );
         s._endY = ly;
         s._endX = lx;
       }
-      dots.push(el("circle", { r: 4.5, style: `fill:${s.color};stroke:var(--surface-1)`, "stroke-width": 2, opacity: 0 }, svg));
+      dots.push(
+        el(
+          "circle",
+          {
+            r: 4.5,
+            style: `fill:${s.color};stroke:var(--surface-1)`,
+            "stroke-width": 2,
+            opacity: 0,
+          },
+          svg,
+        ),
+      );
     });
     // direct end labels, nudged apart if they collide
     const labeled = series.filter((s) => s._endY !== undefined).sort((a, b) => a._endY - b._endY);
     for (let i = 1; i < labeled.length; i++) {
-      if (labeled[i]._endY - labeled[i - 1]._endY < 13) labeled[i]._endY = labeled[i - 1]._endY + 13;
+      if (labeled[i]._endY - labeled[i - 1]._endY < 13)
+        labeled[i]._endY = labeled[i - 1]._endY + 13;
     }
     labeled.forEach((s) => {
       const t = el("text", { class: "end-label", x: s._endX + 8, y: s._endY + 4 }, svg);
       t.textContent = s.short || s.label;
     });
-    const overlay = el("rect", { x: m.left, y: m.top, width: w, height: h, fill: "transparent" }, svg);
+    const overlay = el(
+      "rect",
+      { x: m.left, y: m.top, width: w, height: h, fill: "transparent" },
+      svg,
+    );
     overlay.addEventListener("mousemove", (ev) => {
       const rect = svg.getBoundingClientRect();
       const px = ((ev.clientX - rect.left) / rect.width) * width;
@@ -255,7 +323,11 @@ export function lineChart(container, opts) {
         ? series.map((s) => ttRow(s.color, s.label, valueFormat(s.value(pt)), true)).join("") +
           `<div class="tt-row" style="color:var(--text-muted)">spans<b>${pt.count}</b></div>`
         : `<div class="tt-row" style="color:var(--text-muted)">no spans</div>`;
-      tip.show(`<div class="tt-title">${esc(fmtTime(pt.t))}</div>${rows}`, (x / width) * container.clientWidth, m.top);
+      tip.show(
+        `<div class="tt-title">${esc(fmtTime(pt.t))}</div>${rows}`,
+        (x / width) * container.clientWidth,
+        m.top,
+      );
     });
     overlay.addEventListener("mouseleave", () => {
       cross.setAttribute("opacity", 0);
@@ -283,20 +355,32 @@ export function hBars(container, opts) {
     const m = { top: 4, right: valueW, bottom: 4, left: labelW };
     const height = m.top + m.bottom + items.length * rowHeight;
     const w = width - m.left - m.right;
-    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": opts.ariaLabel || "" });
+    const svg = el("svg", {
+      viewBox: `0 0 ${width} ${height}`,
+      role: "img",
+      "aria-label": opts.ariaLabel || "",
+    });
     container.prepend(svg);
     const max = Math.max(...items.map((d) => d.value), 0) || 1;
     const bh = Math.min(16, rowHeight - 12);
     items.forEach((d, i) => {
       const yMid = m.top + i * rowHeight + rowHeight / 2;
-      const lab = el("text", { class: "cat-label", x: m.left - 10, y: yMid + 4, "text-anchor": "end" }, svg);
+      const lab = el(
+        "text",
+        { class: "cat-label", x: m.left - 10, y: yMid + 4, "text-anchor": "end" },
+        svg,
+      );
       lab.textContent = d.label.length > 22 ? d.label.slice(0, 21) + "…" : d.label;
       const bw = Math.max(d.value > 0 ? 3 : 0, (d.value / max) * w);
       const p = rightRoundedRect(m.left, yMid - bh / 2, bw, bh, 4);
       if (p) el("path", { d: p, style: `fill:${color}` }, svg);
       const val = el("text", { class: "bar-label", x: m.left + bw + 8, y: yMid + 4 }, svg);
       val.textContent = format(d.value);
-      const hit = el("rect", { x: 0, y: yMid - rowHeight / 2, width, height: rowHeight, fill: "transparent" }, svg);
+      const hit = el(
+        "rect",
+        { x: 0, y: yMid - rowHeight / 2, width, height: rowHeight, fill: "transparent" },
+        svg,
+      );
       hit.addEventListener("mouseenter", () => {
         tip.show(
           `<div class="tt-title">${esc(d.label)}</div>${ttRow(color, opts.valueLabel || "value", format(d.value))}${d.detail || ""}`,

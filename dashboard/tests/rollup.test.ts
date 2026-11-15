@@ -76,10 +76,7 @@ test("rollUpByModel counts errors per model", () => {
 });
 
 test("rollUpByModel surfaces non-zero cost for known models", () => {
-  const spans: GenAISpan[] = [
-    span("gpt-4o-mini", 100),
-    span("gpt-4o-mini", 200),
-  ];
+  const spans: GenAISpan[] = [span("gpt-4o-mini", 100), span("gpt-4o-mini", 200)];
   const rollups = rollUpByModel(spans);
   assert.ok(rollups[0]!.costUsd > 0);
 });

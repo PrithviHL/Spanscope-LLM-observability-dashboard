@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { buildApp, MAX_BODY_BYTES } from "../src/server.js";
-import { ObservabilityStore, flattenOtlp } from "../src/spans.js";
+import { flattenOtlp } from "../src/otlp.js";
+import { ObservabilityStore } from "../src/store.js";
 
 const otlpBody = {
   resourceSpans: [

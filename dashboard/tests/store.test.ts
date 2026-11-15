@@ -1,6 +1,8 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { ObservabilityStore, RingBuffer, normaliseSpan } from "../src/spans.js";
+import { normaliseSpan } from "../src/normalise.js";
+import { RingBuffer } from "../src/ring-buffer.js";
+import { ObservabilityStore } from "../src/store.js";
 
 test("ring buffer holds items below capacity", () => {
   const rb = new RingBuffer<number>(3);
@@ -35,10 +37,7 @@ test("ring buffer rejects non-positive capacity", () => {
 test("normaliseSpan rejects malformed input", () => {
   assert.equal(normaliseSpan(null), null);
   assert.equal(normaliseSpan({}), null);
-  assert.equal(
-    normaliseSpan({ attributes: { "gen_ai.system": "openai" } }),
-    null,
-  );
+  assert.equal(normaliseSpan({ attributes: { "gen_ai.system": "openai" } }), null);
 });
 
 test("normaliseSpan accepts a complete GenAI shape", () => {
