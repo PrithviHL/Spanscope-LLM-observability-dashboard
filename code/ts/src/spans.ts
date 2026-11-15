@@ -60,6 +60,12 @@ export class RingBuffer<T> {
     return this.filled;
   }
 
+  clear(): void {
+    this.slots.fill(undefined);
+    this.writeIdx = 0;
+    this.filled = false;
+  }
+
   snapshot(): T[] {
     if (!this.filled) return this.slots.slice(0, this.writeIdx) as T[];
     return [
@@ -228,6 +234,14 @@ export class ObservabilityStore {
 
   snapshot(): GenAISpan[] {
     return this.spans.snapshot();
+  }
+
+  /** Drop all held spans and reset counters. */
+  clear(): Counters {
+    this.spans.clear();
+    this.accepted = 0;
+    this.rejected = 0;
+    return this.counters();
   }
 
   counters(): Counters {

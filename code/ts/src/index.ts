@@ -28,12 +28,18 @@ export function generateSyntheticSpans(cfg: SyntheticConfig): GenAISpan[] {
   if (cfg.models.length === 0) {
     throw new Error("generateSyntheticSpans: cfg.models must not be empty");
   }
-  const now = Date.now() * 1e6;
+  // Spread spans evenly over the last hour so time-series charts have data.
+  const nowNs = Date.now() * 1e6;
+  const spacingNs = (60 * 60 * 1e9) / Math.max(1, cfg.spans);
   const out: GenAISpan[] = [];
   for (let i = 0; i < cfg.spans; i++) {
     const model = cfg.models[i % cfg.models.length]!;
     if (!model) continue;
-    const baseLatencyMs = 400 + ((i * 31) % 1800);
+    // The last 15% of traffic carries a latency regression, so the demo has
+    // something to spot on the latency chart.
+    const regression = i > cfg.spans * 0.85 ? 1.6 : 1;
+    const baseLatencyMs = Math.round((400 + ((i * 31) % 1800)) * regression);
+    const endNs = nowNs - (cfg.spans - 1 - i) * spacingNs;
     const inputTokens = 200 + ((i * 17) % 4000);
     const outputTokens = 120 + ((i * 23) % 800);
     const isError =
@@ -42,8 +48,8 @@ export function generateSyntheticSpans(cfg: SyntheticConfig): GenAISpan[] {
       trace_id: `trace-${i.toString(16).padStart(8, "0")}`,
       span_id: `span-${i.toString(16).padStart(8, "0")}`,
       name: "chat.completion",
-      start_time_unix_nano: now + i * 1_000_000,
-      end_time_unix_nano: now + i * 1_000_000 + baseLatencyMs * 1e6,
+      start_time_unix_nano: endNs - baseLatencyMs * 1e6,
+      end_time_unix_nano: endNs,
       status: isError ? "ERROR" : "OK",
       attributes: {
         "gen_ai.system": model.startsWith("gpt")
@@ -110,7 +116,8 @@ function main(): void {
     const port = Number(process.env["PORT"] ?? 8011);
     const app = buildApp(store);
     serve({ fetch: app.fetch, port }, (info) => {
-      console.log(`[obs] ingest + dashboard on http://localhost:${info.port}`);
+      console.log(`[obs] web app on http://localhost:${info.port}`);
+      console.log(`[obs] OTLP/HTTP JSON ingest at http://localhost:${info.port}/v1/traces`);
     });
   } else {
     console.log(

@@ -6,7 +6,7 @@ Self-hosted observability platform for production LLM applications.
 
 | Path | What it is | Run |
 |---|---|---|
-| `code/ts/` | Hono ingest server + HTML dashboard: accepts GenAI spans (flat JSON or OTLP/HTTP JSON at `/v1/traces`), 10k ring buffer, p50/p95/p99 latency, cost per model | `cd code/ts && npm install && npm run serve`, then open http://localhost:8011/dashboard |
+| `code/ts/` | Hono ingest server + web app: accepts GenAI spans (flat JSON or OTLP/HTTP JSON at `/v1/traces`), 10k ring buffer, live overview charts, per-model table, trace explorer, test-data tools | `cd code/ts && npm install && npm run serve`, then open http://localhost:8011 |
 | `code/main.py` | Stdlib Python pipeline: tail sampler, eval spans (faithfulness / toxicity / PII), PSI drift, alerter, with an injected PII regression | `python3 code/main.py` |
 
 Requires Node.js 20+ and Python 3.9+. Tests: `cd code/ts && npm run typecheck && npm test`.
