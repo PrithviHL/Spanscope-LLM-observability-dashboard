@@ -1,9 +1,12 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { rollUpByModel } from "./rollup.js";
 import type { ObservabilityStore } from "./spans.js";
 
-function escapeHtml(s: string): string {
-  return s
+export const MAX_BODY_BYTES = 5 * 1024 * 1024;
+
+function escapeHtml(s: unknown): string {
+  return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -14,7 +17,12 @@ function escapeHtml(s: string): string {
 export function buildApp(store: ObservabilityStore): Hono {
   const app = new Hono();
 
-  app.post("/trace", async (c) => {
+  const limit = bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) => c.json({ error: "payload_too_large" }, 413),
+  });
+
+  const ingestHandler = async (c: Context) => {
     try {
       const body = await c.req.json();
       const counters = store.ingest(body);
@@ -22,7 +30,12 @@ export function buildApp(store: ObservabilityStore): Hono {
     } catch (err) {
       return c.json({ error: "bad_request", message: String(err) }, 400);
     }
-  });
+  };
+
+  // Flat GenAI span(s) or an OTLP/HTTP JSON export request.
+  app.post("/trace", limit, ingestHandler);
+  // Standard OTLP/HTTP path, so an OTel exporter can point straight at this server.
+  app.post("/v1/traces", limit, ingestHandler);
 
   app.get("/", (c) => c.html(renderDashboardHtml(store)));
   app.get("/dashboard", (c) => c.html(renderDashboardHtml(store)));
@@ -55,7 +68,8 @@ export function renderDashboardHtml(store: ObservabilityStore): string {
     .join("\n");
   return [
     "<!doctype html>",
-    "<html><head><title>LLM observability dashboard</title>",
+    "<html><head><meta charset='utf-8'><meta http-equiv='refresh' content='5'>",
+    "<title>LLM observability dashboard</title>",
     "<style>",
     "body{font-family:system-ui,sans-serif;margin:2rem;max-width:1100px;}",
     "table{border-collapse:collapse;width:100%;}",
@@ -76,7 +90,7 @@ export function renderDashboardHtml(store: ObservabilityStore): string {
     "</tr></thead><tbody>",
     rows,
     "</tbody></table>",
-    "<p><small>POST OTel-GenAI spans to /trace. JSON roll-up at /dashboard.json.</small></p>",
+    "<p><small>POST OTel-GenAI spans to /trace or OTLP/HTTP JSON to /v1/traces. JSON roll-up at /dashboard.json. Auto-refreshes every 5s.</small></p>",
     "</body></html>",
   ].join("\n");
 }

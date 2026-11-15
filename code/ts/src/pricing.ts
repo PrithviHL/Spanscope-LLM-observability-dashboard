@@ -12,10 +12,9 @@ export const PRICE_USD_PER_MTOKEN: Record<
 };
 
 export function spanModel(span: GenAISpan): string {
-  return (
-    span.attributes["gen_ai.response.model"] ??
-    span.attributes["gen_ai.request.model"]
-  );
+  const resp = span.attributes["gen_ai.response.model"];
+  if (typeof resp === "string" && resp !== "") return resp;
+  return String(span.attributes["gen_ai.request.model"]);
 }
 
 export function spanCostUsd(span: GenAISpan): number {

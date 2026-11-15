@@ -2,6 +2,19 @@
 
 Self-hosted observability platform for production LLM applications.
 
+## Quick start (what's runnable in this repo)
+
+| Path | What it is | Run |
+|---|---|---|
+| `code/ts/` | Hono ingest server + HTML dashboard: accepts GenAI spans (flat JSON or OTLP/HTTP JSON at `/v1/traces`), 10k ring buffer, p50/p95/p99 latency, cost per model | `cd code/ts && npm install && npm run serve`, then open http://localhost:8011/dashboard |
+| `code/main.py` | Stdlib Python pipeline: tail sampler, eval spans (faithfulness / toxicity / PII), PSI drift, alerter, with an injected PII regression | `python3 code/main.py` |
+
+Requires Node.js 20+ and Python 3.9+. Tests: `cd code/ts && npm run typecheck && npm test`.
+
+The sections below describe the full target architecture (ClickHouse, Postgres,
+Next.js, Alertmanager); those pieces are not implemented in this repo yet. The
+in-memory store above stands in for them.
+
 ## What it does
 - Ingests OpenTelemetry GenAI spans from OpenAI, Anthropic, Google GenAI, LangChain, LlamaIndex, and vLLM
 - Stores spans in ClickHouse for columnar analytics; metadata in Postgres
