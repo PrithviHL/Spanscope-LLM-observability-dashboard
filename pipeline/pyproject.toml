@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-obs"
+version = "0.2.0"
+description = "Tail sampling, eval spans, drift detection and alerting for LLM traces (stdlib only)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+llm-obs-demo = "llm_obs.__main__:main"
+
+[tool.setuptools]
+packages = ["llm_obs"]
+
