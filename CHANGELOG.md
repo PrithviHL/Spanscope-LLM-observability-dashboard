@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded the heuristic evaluators (still standard library only):
+  - **Toxicity** scores insults only when aimed at someone, plus threats, hostile
+    dismissals and profanity. Technical uses ("kill the process", "garbage
+    collection", "dumb terminal") no longer fire.
+  - **Faithfulness** ignores stopwords, stems words, and penalises numbers missing
+    from the context, added or dropped negation, antonyms ("fell" vs "grew") and
+    swapped facts ("opens at 6, closes at 9" reversed).
+  - **PII** adds phone numbers, credit cards (Luhn-checked), IPv4 addresses,
+    street addresses, spelled-out emails, and keyword-anchored account, passport,
+    MRN and date-of-birth numbers.
+
+### Added
+
+- [`pipeline/benchmarks/`](pipeline/benchmarks/README.md): a dev set, a held-out
+  set frozen by checksum, and a fetcher for OffensEval 2019. On its 860-tweet test
+  split toxicity F1 rose from 0.02 to 0.52 (precision 0.88).
+
 ## [0.3.0] - 2026-11-15
 
 ### Added

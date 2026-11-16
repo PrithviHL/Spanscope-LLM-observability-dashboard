@@ -53,6 +53,9 @@ python3 -m unittest discover -s tests -v
 | `alerts.py` | `evaluate_alerts`: PII and toxicity thresholds (Alertmanager stand-in) |
 | `__main__.py` | command-line demo wiring the stages together |
 
-The evals are heuristics that stand in for LLM-judge or DeepEval scorers; see
+The evals are heuristics that stand in for LLM-judge or DeepEval scorers. Their
+accuracy is measured in [`benchmarks/`](benchmarks/README.md): on 860
+human-labelled OffensEval tweets never used for tuning, toxicity reaches F1 0.52
+at 0.88 precision (up from 0.02). See
 [`docs/architecture.md`](../docs/architecture.md) for how they map to the target
 production stack.

@@ -40,19 +40,36 @@ def llm_span(response="the weather is mild", status="ok", user="u_01", cost=0.01
 
 
 class EvalTests(unittest.TestCase):
-    def test_faithfulness_is_token_overlap(self):
-        self.assertEqual(eval_faithfulness("a b", "a b c"), 1.0)
-        self.assertEqual(eval_faithfulness("a z", "a b"), 0.5)
-        self.assertEqual(eval_faithfulness("", "a"), 0.0)
+    def test_faithfulness_overlap_and_contradictions(self):
+        ctx = "the store opens at 9 am and closes at 6 pm"
+        self.assertEqual(eval_faithfulness("the store opens at 9 am", ctx), 1.0)
+        self.assertEqual(eval_faithfulness("it closes at 6 pm and opens at 9 am", ctx), 1.0)  # reordered
+        self.assertLessEqual(eval_faithfulness("revenue fell", "revenue grew"), 0.3)  # word with 2 antonyms
+        self.assertEqual(eval_faithfulness("", ctx), 0.0)
+        self.assertLessEqual(eval_faithfulness("the store opens at 7 am", ctx), 0.3)  # unsupported number
+        self.assertLessEqual(eval_faithfulness("the store does not open", ctx), 0.4)  # added negation
+        self.assertLessEqual(eval_faithfulness("the store closes early", "the store opens early"), 0.3)  # antonym
+        self.assertLessEqual(eval_faithfulness("it opens at 6 pm and closes at 9 am", ctx), 0.3)  # swapped facts
 
-    def test_toxicity(self):
+    def test_toxicity_needs_a_target(self):
         self.assertEqual(eval_toxicity("have a nice day"), 0.0)
         self.assertEqual(eval_toxicity("you are stupid"), 1.0)
+        self.assertEqual(eval_toxicity("what a clueless take"), 1.0)
+        self.assertEqual(eval_toxicity("i'm going to hurt you"), 1.0)
+        self.assertEqual(eval_toxicity("shut up"), 1.0)
+        for benign in ("kill the process with -9", "garbage collection paused for 40 ms",
+                       "the dumb terminal is offline", "i hate flaky tests"):
+            self.assertLess(eval_toxicity(benign), 0.5, benign)
 
-    def test_pii_leak_detects_ssn_and_email(self):
+    def test_pii_leak(self):
         self.assertGreater(eval_pii_leak("ssn 123-45-6789"), 0.9)
+        self.assertGreater(eval_pii_leak("card 4111 1111 1111 1111"), 0.9)  # passes Luhn
+        self.assertLess(eval_pii_leak("order 4111 1111 1111 1112"), 0.5)  # fails Luhn
         self.assertEqual(eval_pii_leak("mail me at a@b.com"), 0.6)
-        self.assertLess(eval_pii_leak("nothing to see"), 0.1)
+        self.assertEqual(eval_pii_leak("call 352-555-0142"), 0.6)
+        self.assertEqual(eval_pii_leak("ship to 42 elm street"), 0.7)
+        for benign in ("nothing to see", "release v1.24.3", "port 8080", "meet at 14:30", "scored 4-1"):
+            self.assertLess(eval_pii_leak(benign), 0.1, benign)
 
     def test_enrich_adds_one_eval_child_per_llm_span(self):
         root = Span("t1", "t1_0", None, "chat_turn", 0, 200, {})
