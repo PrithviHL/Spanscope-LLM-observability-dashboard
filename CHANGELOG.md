@@ -21,6 +21,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Load-test script [`dashboard/bench/load.mjs`](dashboard/bench/load.mjs) and a
+  Performance section in the README: 436,223 spans/s in memory and 52,739
+  spans/s into ClickHouse from one Node process (batches of 100 spans).
 - [`pipeline/benchmarks/`](pipeline/benchmarks/README.md): a dev set, a held-out
   set frozen by checksum, and a fetcher for OffensEval 2019. On its 860-tweet test
   split toxicity F1 rose from 0.02 to 0.52 (precision 0.88).

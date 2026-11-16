@@ -45,6 +45,34 @@ The demo receives synthetic traffic; see the [user guide](docs/user-guide.md).
 
 ![Trace detail in dark mode: a failed call with latency, tokens, cost, waterfall and attributes](docs/assets/screenshot-trace-dark.jpg)
 
+## Performance and accuracy
+
+**Ingest throughput.** One Node process on an Apple M4 Pro (12 cores), 32
+connections for 10 seconds, sending OTLP/HTTP JSON. No requests failed, and in
+the ClickHouse runs every accepted span was stored (616,313 accepted, 616,313 stored).
+
+| Spans per request | In memory | ClickHouse |
+|---|---|---|
+| 1 | 18,213 spans/s (p99 4.9 ms) | 790 spans/s |
+| 10 | 179,914 spans/s | 7,969 spans/s |
+| 100 | **436,223 spans/s** (p99 14.1 ms) | **52,739 spans/s** (p99 308 ms) |
+
+ClickHouse is limited by one insert per request, so batch your exports (OTel SDKs
+batch by default). Stored spans take about 3.8× less space than raw JSON; see the
+[ClickHouse guide](docs/clickhouse.md). Reproduce with
+[`dashboard/bench/load.mjs`](dashboard/bench/load.mjs):
+
+```bash
+cd dashboard && npm run serve        # in one terminal (no rate limit by default)
+node bench/load.mjs http://localhost:8011/v1/traces 100 10 32
+```
+
+**Evaluator accuracy.** The pipeline's rule-based toxicity scorer was tested on
+the 860-tweet OffensEval 2019 test set (human-labelled, never used for tuning):
+F1 0.52 at 0.88 precision, up from 0.02 before the rewrite. Faithfulness
+and PII are only measured on small AI-written sets so far. Details and caveats
+are in [`pipeline/benchmarks`](pipeline/benchmarks/README.md).
+
 ## What's inside
 
 | Directory | What it is | Stack |
