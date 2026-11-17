@@ -46,16 +46,57 @@ python3 -m unittest discover -s tests -v
 |---|---|
 | `spans.py` | `Span` model using OpenTelemetry GenAI attribute names |
 | `simulate.py` | synthetic chat traces, with an optional PII-leak regression |
-| `evals.py` | faithfulness, toxicity and PII-leak scorers; `enrich_with_evals` adds `eval` child spans |
+| `evals.py` | faithfulness, toxicity and PII-leak heuristics; `enrich_with_evals` adds `eval` child spans |
+| `judges.py` | eval backends: heuristics (default), DeepEval or RAGAS judged by Claude |
 | `sampler.py` | `TailSampler`: always keeps errored or flagged traces, samples the rest |
 | `store.py` | in-memory `SpanStore` with per-user and per-model counters (ClickHouse stand-in) |
 | `drift.py` | prompt fingerprints and PSI; above 0.2 counts as drift |
 | `alerts.py` | `evaluate_alerts`: PII and toxicity thresholds (Alertmanager stand-in) |
 | `__main__.py` | command-line demo wiring the stages together |
 
-The evals are heuristics that stand in for LLM-judge or DeepEval scorers. Their
-accuracy is measured in [`benchmarks/`](benchmarks/README.md): on 860
+By default the evals are heuristics (standard library only). Their accuracy is
+measured in [`benchmarks/`](benchmarks/README.md): on 860
 human-labelled OffensEval tweets never used for tuning, toxicity reaches F1 0.52
 at 0.88 precision (up from 0.02). See
 [`docs/architecture.md`](../docs/architecture.md) for how they map to the target
 production stack.
+
+## Model-based evals: DeepEval and RAGAS
+
+The same three scores can come from [DeepEval](https://github.com/confident-ai/deepeval)
+or [RAGAS](https://github.com/explodinggradients/ragas), with Claude as the judge.
+Sampling and alerting don't change: every backend writes the same attributes
+to the `eval` span.
+
+| Backend | faithfulness | toxicity | pii_leak | Extra attributes |
+|---|---|---|---|---|
+| `heuristic` (default) | rules | rules | rules | none |
+| `deepeval` | `FaithfulnessMetric` | `ToxicityMetric` | `PIILeakageMetric` | `eval.backend`, `eval.judge_model` |
+| `ragas` | `Faithfulness` | rules (RAGAS has no toxicity metric) | rules (no PII metric) | `context_relevance`, `eval.backend`, `eval.judge_model` |
+
+Install the extra (Python 3.10+) and give the Anthropic SDK credentials
+(`ANTHROPIC_API_KEY`, or a profile from `ant auth login`):
+
+```bash
+pip install -e ".[deepeval]"     # or ".[ragas]", or ".[judges]" for both
+python -m llm_obs --evals deepeval --traces 20
+python benchmarks/run.py --backend deepeval --limit 5
+```
+
+- **Judge model:** `claude-opus-5-5` by default. Change it with `--judge-model`
+  or `SPANSCOPE_JUDGE_MODEL`.
+- **Cost:** each LLM span takes several judge calls (DeepEval: 2–3 per metric).
+  Use small `--traces` / `--limit` values while trying it, and in production run
+  the judges on tail-sampled traces only.
+- **Direction:** DeepEval 4.3+ scores toxicity and PII as the share of
+  statements that pass (1.0 = safe). Spanscope flips them so that, as everywhere
+  else in the project, higher means worse.
+- **Failures:** if a judge call fails (rate limit, timeout), that metric falls
+  back to the heuristic, a warning is logged, and the span gets `eval.fallback`.
+  Faithfulness is only judged when the span has a retrieval `context`.
+- **Telemetry:** both libraries send usage analytics by default. Spanscope sets
+  `DEEPEVAL_TELEMETRY_OPT_OUT=1` and `RAGAS_DO_NOT_TRACK=true` unless you have
+  set them yourself.
+- **Tests:** `tests/test_judges.py` runs the real DeepEval and RAGAS metric code
+  against a fake judge model, so CI checks the integration without an API key
+  or network access.

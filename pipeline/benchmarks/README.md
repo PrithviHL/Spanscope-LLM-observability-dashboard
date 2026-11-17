@@ -6,7 +6,12 @@ agree with labels. Run from `pipeline/`:
 ```bash
 python3 benchmarks/fetch_offenseval.py   # optional: downloads the external set
 python3 benchmarks/run.py
+python3 benchmarks/run.py --backend deepeval --limit 5   # Claude-judged; costs API credits
 ```
+
+`--backend deepeval|ragas` scores the same sets with the model-based evaluators
+(see the [pipeline README](../README.md#model-based-evals-deepeval-and-ragas)).
+They have not been benchmarked here yet, so no numbers are reported for them.
 
 ## Results (threshold 0.5)
 

@@ -78,7 +78,7 @@ are in [`pipeline/benchmarks`](pipeline/benchmarks/README.md).
 | Directory | What it is | Stack |
 |---|---|---|
 | [`dashboard/`](dashboard/) | Ingest server, storage (in memory or ClickHouse), JSON API, optional GitHub sign-in, and the web app | Node.js 20+, TypeScript, Hono; vanilla JS and SVG front end |
-| [`pipeline/`](pipeline/) | Tail sampler, eval spans (faithfulness, toxicity, PII), PSI drift detector and alerting, with a demo that catches an injected PII leak | Python 3.9+, standard library only |
+| [`pipeline/`](pipeline/) | Tail sampler, eval spans (faithfulness, toxicity, PII) from heuristics or DeepEval / RAGAS, PSI drift detector and alerting, with a demo that catches an injected PII leak | Python 3.9+, standard library only; DeepEval / RAGAS optional (3.10+) |
 | [`docs/`](docs/) | Guides, architecture, API reference, design decisions and the original brief | Markdown |
 
 ## Quick start
@@ -156,9 +156,10 @@ process.
 
 A working, tested prototype: the ingest server, web app, ClickHouse storage,
 optional sign-in and the pipeline all run, with 58 TypeScript tests, 4
-ClickHouse integration tests and 15 Python tests in CI. Not built yet from the
-design brief: running the pipeline's evals and alerts on ingested data,
-model-based eval jobs, Alertmanager integration, and per-user data separation.
+ClickHouse integration tests and 30 Python tests in CI. The pipeline can score
+traces with built-in heuristics or with DeepEval / RAGAS judged by Claude. Not
+built yet from the design brief: running the pipeline's evals and alerts on
+ingested data, Alertmanager integration, and per-user data separation.
 [docs/architecture.md](docs/architecture.md#target-production-architecture)
 shows what's a stand-in and what's next.
 

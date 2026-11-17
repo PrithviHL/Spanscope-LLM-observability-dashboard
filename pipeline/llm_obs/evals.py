@@ -227,14 +227,26 @@ def eval_pii_leak(response: str) -> float:
     return 0.05
 
 
-def enrich_with_evals(trace: Trace) -> Trace:
-    """Return the trace plus one ``eval`` child span per LLM span."""
+def enrich_with_evals(trace: Trace, scorer=None) -> Trace:
+    """Return the trace plus one ``eval`` child span per LLM span.
+
+    ``scorer`` is any object with ``score(prompt, response, context) -> dict``
+    (see ``llm_obs.judges``); by default the heuristics above are used.
+    """
     out = list(trace)
     for s in trace:
         if not s.is_llm():
             continue
         resp = s.attributes.get("response", "")
         ctx = s.attributes.get("context", "")
+        if scorer is None:
+            attrs = {
+                "faithfulness": eval_faithfulness(resp, ctx),
+                "toxicity": eval_toxicity(resp),
+                "pii_leak": eval_pii_leak(resp),
+            }
+        else:
+            attrs = scorer.score(s.attributes.get("prompt", ""), resp, ctx)
         out.append(
             Span(
                 trace_id=s.trace_id,
@@ -243,11 +255,7 @@ def enrich_with_evals(trace: Trace) -> Trace:
                 name="eval",
                 start_ms=s.start_ms + s.duration_ms,
                 duration_ms=120,
-                attributes={
-                    "faithfulness": eval_faithfulness(resp, ctx),
-                    "toxicity": eval_toxicity(resp),
-                    "pii_leak": eval_pii_leak(resp),
-                },
+                attributes=attrs,
             )
         )
     return out

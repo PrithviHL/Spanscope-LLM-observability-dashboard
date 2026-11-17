@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **DeepEval and RAGAS eval backends** (`pipeline/llm_obs/judges.py`), judged by
+  Claude (`claude-opus-5-5` by default). Choose with `python -m llm_obs --evals
+  deepeval|ragas` or `benchmarks/run.py --backend`. Optional extras
+  `[deepeval]`, `[ragas]` and `[judges]`; the core stays standard library only.
+  DeepEval's toxicity and PII scores are flipped to Spanscope's direction
+  (higher = worse), failed judge calls fall back to the heuristic, and both
+  libraries' usage analytics are off by default.
+- A CI job that runs the real DeepEval and RAGAS metric code against a fake
+  judge model (no API key needed).
+
 ### Changed
 
 - Upgraded the heuristic evaluators (still standard library only):

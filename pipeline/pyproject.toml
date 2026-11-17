@@ -5,10 +5,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "spanscope-pipeline"
 version = "0.3.0"
-description = "Tail sampling, eval spans, drift detection and alerting for LLM traces (stdlib only)."
+description = "Tail sampling, eval spans, drift detection and alerting for LLM traces (core is stdlib only; optional DeepEval and RAGAS evals)."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
+
+[project.optional-dependencies]
+# Model-based evals judged by Claude. Need Python 3.10+ and an Anthropic API key.
+deepeval = ["deepeval>=4.3,<5", "anthropic>=2"]
+ragas = ["ragas>=0.4.4,<0.5", "anthropic>=2"]
+judges = ["spanscope-pipeline[deepeval,ragas]"]
 
 [project.scripts]
 llm-obs-demo = "llm_obs.__main__:main"

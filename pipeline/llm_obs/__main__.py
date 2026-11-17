@@ -1,6 +1,7 @@
 """End-to-end demo: 200 synthetic traces with a 1% injected PII-leak regression.
 
 Usage: python -m llm_obs [--traces N] [--leak-rate R] [--sample-rate R] [--seed S]
+                        [--evals heuristic|deepeval|ragas] [--judge-model MODEL]
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import List, Optional, Sequence
 from .alerts import evaluate_alerts
 from .drift import PSI_ALERT_THRESHOLD, prompt_fingerprint, psi
 from .evals import enrich_with_evals
+from .judges import BACKENDS, judge_model, make_scorer
 from .sampler import TailSampler
 from .simulate import synth_trace
 from .store import SpanStore
@@ -23,6 +25,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument("--leak-rate", type=float, default=0.01, help="share of PII-leaking traces")
     p.add_argument("--sample-rate", type=float, default=0.20, help="tail-sample rate for OK traces")
     p.add_argument("--seed", type=int, default=5, help="random seed (default 5)")
+    p.add_argument("--evals", choices=BACKENDS, default="heuristic",
+                   help="eval backend: built-in heuristics (default), or DeepEval / RAGAS judged by Claude")
+    p.add_argument("--judge-model", default=None,
+                   help="Claude model for DeepEval/RAGAS (default $SPANSCOPE_JUDGE_MODEL or claude-opus-5-5)")
     args = p.parse_args(argv)
     if args.traces < 1:
         p.error("--traces must be at least 1")
@@ -37,6 +43,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     rng = random.Random(args.seed)
     sampler = TailSampler(sample_rate=args.sample_rate, rng=rng)
     store = SpanStore()
+    scorer = None
+    if args.evals != "heuristic":
+        try:
+            scorer = make_scorer(args.evals, args.judge_model)
+        except Exception as err:  # noqa: BLE001 - missing extra or judge credentials
+            print(f"error: could not set up the {args.evals} backend: {err}")
+            return 2
+        print(f"evals: {args.evals}, judged by {judge_model(args.judge_model)} "
+              f"(a few model calls per trace; {args.traces} traces)")
 
     # Prompt fingerprints for drift: the last quarter of traffic is compared to the rest.
     split = int(args.traces * 0.75)
@@ -45,7 +60,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     for i in range(args.traces):
         leak = rng.random() < args.leak_rate
-        trace = enrich_with_evals(synth_trace(f"t{i:04d}", leak_pii=leak, rng=rng))
+        trace = enrich_with_evals(synth_trace(f"t{i:04d}", leak_pii=leak, rng=rng), scorer)
         if sampler.decide(trace):
             store.insert_trace(trace)
         # Drift watches the input distribution, so it sees every trace, sampled or not.

@@ -97,3 +97,22 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -W error -m unittest discover -s tests -v
       - run: python -m llm_obs
+
+  pipeline-judges:
+    name: Pipeline with DeepEval and RAGAS
+    # Runs the real DeepEval and RAGAS metric code against a fake judge model,
+    # so it needs no API key. Not under -W error: the libraries' own
+    # dependencies emit deprecation warnings Spanscope can't fix.
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[judges]"
+      # Fail loudly if the extras didn't install, instead of skipping their tests.
+      - run: python -c "import deepeval, ragas"
+      - run: python -m unittest discover -s tests -v

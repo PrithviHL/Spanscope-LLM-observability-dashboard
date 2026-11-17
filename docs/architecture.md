@@ -91,7 +91,7 @@ for a production stack. This repo stands in for its pieces as follows:
 |---|---|---|
 | OpenTelemetry Collector with tail sampling | `dashboard` ingest + `pipeline/sampler.py` | Partial: not connected |
 | ClickHouse (spans), Postgres (metadata), S3 (archive) | Optional ClickHouse backend (`STORAGE=clickhouse`); in-memory ring buffer by default | ClickHouse done; Postgres and S3 not started |
-| DeepEval / RAGAS / LLM-judge eval jobs | `pipeline/evals.py` heuristics | Heuristic only |
+| DeepEval / RAGAS / LLM-judge eval jobs | `pipeline/judges.py`: heuristics by default, or DeepEval / RAGAS with a Claude judge | Done in the pipeline; not yet run on ingested traces |
 | PSI/KL drift on prompt embeddings | `pipeline/drift.py` on prompt hashes | Heuristic only |
 | Prometheus → Alertmanager → Slack/PagerDuty | `pipeline/alerts.py` | Console output only |
 | Next.js 15 + Recharts UI | `dashboard/public` single-page app | Done, without framework |
