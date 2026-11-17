@@ -1,4 +1,4 @@
-"""Eval backends: the built-in heuristics, DeepEval or RAGAS (both judged by Claude).
+"""Eval backends: the built-in heuristics, DeepEval or RAGAS (judged by Claude or Gemini).
 
 Every backend returns the same span attributes, so sampling and alerting don't
 change with the backend:
@@ -12,13 +12,22 @@ or ``[ragas]``, Python 3.10+). They are imported only when their backend is
 chosen, so the default heuristic backend still needs nothing but the standard
 library. Each LLM span costs a few judge-model calls, so use them on sampled
 traffic, not on every request.
+
+The judge provider follows the model name: ``claude-*`` uses the Anthropic SDK
+(``ANTHROPIC_API_KEY`` or an ``ant auth login`` profile); ``gemini-*`` uses
+Google's Gemini API (``GEMINI_API_KEY`` or ``GOOGLE_API_KEY``), which has a free
+tier. ``SPANSCOPE_JUDGE_RPM`` caps judge requests per minute (default 4 for
+Gemini, to stay inside free-tier limits; no cap for Claude).
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import os
+import threading
+import time
 import warnings
 from typing import Any, Callable, Dict, Mapping, Optional
 
@@ -27,6 +36,11 @@ from .evals import eval_faithfulness, eval_pii_leak, eval_toxicity
 BACKENDS = ("heuristic", "deepeval", "ragas")
 DEFAULT_JUDGE_MODEL = "claude-opus-5-5"
 JUDGE_MODEL_ENV = "SPANSCOPE_JUDGE_MODEL"
+JUDGE_RPM_ENV = "SPANSCOPE_JUDGE_RPM"
+GEMINI_FREE_TIER_RPM = 4  # free tier allows 5 per minute per model; keep a margin
+# Gemini's OpenAI-compatible endpoint, used for RAGAS (its native Google path
+# needs a newer `instructor` than RAGAS 0.4.4 installs).
+GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 Scores = Dict[str, Any]
 log = logging.getLogger(__name__)
@@ -37,11 +51,86 @@ def judge_model(model: Optional[str] = None) -> str:
     return model or os.environ.get(JUDGE_MODEL_ENV) or DEFAULT_JUDGE_MODEL
 
 
+def judge_provider(model: str) -> str:
+    """``google`` for Gemini models, otherwise ``anthropic``."""
+    return "google" if model.lower().startswith("gemini") else "anthropic"
+
+
+def _gemini_key() -> str:
+    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        raise RuntimeError("a Gemini judge needs GEMINI_API_KEY (or GOOGLE_API_KEY) to be set")
+    return key
+
+
+def judge_rpm(model: str) -> float:
+    """Requests per minute allowed for the judge (0 = no limit)."""
+    raw = os.environ.get(JUDGE_RPM_ENV)
+    if raw:
+        return max(0.0, float(raw))
+    return GEMINI_FREE_TIER_RPM if judge_provider(model) == "google" else 0.0
+
+
+class Pacer:
+    """Spaces calls at least ``60 / rpm`` seconds apart (thread-safe)."""
+
+    def __init__(self, rpm: float, clock: Callable[[], float] = time.monotonic,
+                 sleep: Callable[[float], None] = time.sleep):
+        self.interval = 60.0 / rpm if rpm > 0 else 0.0
+        self.clock, self.sleep = clock, sleep
+        self._next = 0.0
+        self._lock = threading.Lock()
+
+    def delay(self) -> float:
+        """Reserve the next slot and return how long to wait for it."""
+        with self._lock:
+            now = self.clock()
+            start = max(now, self._next)
+            self._next = start + self.interval
+            return start - now
+
+    def wait(self) -> None:
+        d = self.delay()
+        if d > 0:
+            self.sleep(d)
+
+    async def await_turn(self) -> None:
+        d = self.delay()
+        if d > 0:
+            await asyncio.sleep(d)
+
+
+def _pace(obj: Any, pacer: Pacer, sync_names=(), async_names=()) -> None:
+    """Wrap a judge's request methods so every call waits for the pacer."""
+    if not pacer.interval:
+        return
+    for name in sync_names:
+        fn = getattr(obj, name)
+
+        @functools.wraps(fn)
+        def paced(*a, _fn=fn, **k):
+            pacer.wait()
+            return _fn(*a, **k)
+
+        setattr(obj, name, paced)
+    for name in async_names:
+        fn = getattr(obj, name)
+
+        @functools.wraps(fn)
+        async def apaced(*a, _fn=fn, **k):
+            await pacer.await_turn()
+            return await _fn(*a, **k)
+
+        setattr(obj, name, apaced)
+
+
 def _no_telemetry() -> None:
     """Both libraries send usage analytics by default; keep that off unless the
-    user has set these variables themselves."""
+    user has set these variables themselves. Also give DeepEval more retries for
+    rate limits (it backs off between them), which free tiers hit often."""
     os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "1")
     os.environ.setdefault("RAGAS_DO_NOT_TRACK", "true")
+    os.environ.setdefault("DEEPEVAL_RETRY_MAX_ATTEMPTS", "6")
 
 
 def _missing(extra: str, err: ImportError) -> ImportError:
@@ -83,11 +172,15 @@ class DeepEvalScorer:
             _no_telemetry()
             try:
                 from deepeval.metrics import FaithfulnessMetric, PIILeakageMetric, ToxicityMetric
-                from deepeval.models import AnthropicModel
+                from deepeval.models import AnthropicModel, GeminiModel
                 from deepeval.test_case import LLMTestCase
             except ImportError as err:
                 raise _missing("deepeval", err) from err
-            judge = AnthropicModel(model=self.model)
+            if judge_provider(self.model) == "google":
+                judge = GeminiModel(model=self.model, api_key=_gemini_key())
+            else:
+                judge = AnthropicModel(model=self.model)
+            _pace(judge, Pacer(judge_rpm(self.model)), ("generate",), ("a_generate",))
             opts = {"model": judge, "include_reason": False, "async_mode": False}
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message=_POLARITY_NOTICE)
@@ -145,17 +238,25 @@ class RagasScorer:
             _no_telemetry()
             try:
                 import instructor
-                from anthropic import AsyncAnthropic
                 from ragas.llms import llm_factory
                 from ragas.metrics.collections import ContextRelevance, Faithfulness
             except ImportError as err:
                 raise _missing("ragas", err) from err
-            # ANTHROPIC_JSON: RAGAS 0.4.4's default (generic JSON) is rejected by
-            # instructor for Anthropic clients, and tool mode forces a tool call,
-            # which current Claude models refuse. Thinking shares max_tokens with
-            # the answer, so leave room for both.
-            llm = llm_factory(self.model, provider="anthropic", client=AsyncAnthropic(),
-                              mode=instructor.Mode.ANTHROPIC_JSON, max_tokens=16000)
+            if judge_provider(self.model) == "google":
+                from openai import AsyncOpenAI  # installed with ragas
+
+                client = AsyncOpenAI(api_key=_gemini_key(), base_url=GEMINI_OPENAI_BASE_URL)
+                llm = llm_factory(self.model, provider="openai", client=client, max_tokens=8000)
+            else:
+                from anthropic import AsyncAnthropic
+
+                # ANTHROPIC_JSON: RAGAS 0.4.4's default (generic JSON) is rejected by
+                # instructor for Anthropic clients, and tool mode forces a tool call,
+                # which current Claude models refuse. Thinking shares max_tokens with
+                # the answer, so leave room for both.
+                llm = llm_factory(self.model, provider="anthropic", client=AsyncAnthropic(),
+                                  mode=instructor.Mode.ANTHROPIC_JSON, max_tokens=16000)
+            _pace(llm, Pacer(judge_rpm(self.model)), ("generate",), ("agenerate",))
             metrics = {"faithfulness": Faithfulness(llm=llm), "context_relevance": ContextRelevance(llm=llm)}
         self.metrics = dict(metrics)
         self.fallback = HeuristicScorer()

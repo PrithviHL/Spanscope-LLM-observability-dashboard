@@ -64,7 +64,8 @@ production stack.
 ## Model-based evals: DeepEval and RAGAS
 
 The same three scores can come from [DeepEval](https://github.com/confident-ai/deepeval)
-or [RAGAS](https://github.com/explodinggradients/ragas), with Claude as the judge.
+or [RAGAS](https://github.com/explodinggradients/ragas), with Claude or Gemini as
+the judge.
 Sampling and alerting don't change: every backend writes the same attributes
 to the `eval` span.
 
@@ -74,17 +75,25 @@ to the `eval` span.
 | `deepeval` | `FaithfulnessMetric` | `ToxicityMetric` | `PIILeakageMetric` | `eval.backend`, `eval.judge_model` |
 | `ragas` | `Faithfulness` | rules (RAGAS has no toxicity metric) | rules (no PII metric) | `context_relevance`, `eval.backend`, `eval.judge_model` |
 
-Install the extra (Python 3.10+) and give the Anthropic SDK credentials
-(`ANTHROPIC_API_KEY`, or a profile from `ant auth login`):
+Install the extra (Python 3.10+) and set credentials for the judge:
 
 ```bash
 pip install -e ".[deepeval]"     # or ".[ragas]", or ".[judges]" for both
-python -m llm_obs --evals deepeval --traces 20
+python -m llm_obs --evals deepeval --traces 20                        # Claude
+python -m llm_obs --evals deepeval --judge-model gemini-3.6-flash      # Gemini
 python benchmarks/run.py --backend deepeval --limit 5
 ```
 
 - **Judge model:** `claude-opus-5-5` by default. Change it with `--judge-model`
-  or `SPANSCOPE_JUDGE_MODEL`.
+  or `SPANSCOPE_JUDGE_MODEL`. The provider follows the name: `claude-*` uses the
+  Anthropic SDK (`ANTHROPIC_API_KEY` or an `ant auth login` profile), `gemini-*`
+  uses the Gemini API (`GEMINI_API_KEY` or `GOOGLE_API_KEY`).
+- **Free option:** Gemini has a free tier (key from
+  [Google AI Studio](https://aistudio.google.com/apikey)). It allows about 5
+  requests a minute per model, so Gemini judges are paced to 4 a minute by
+  default; set `SPANSCOPE_JUDGE_RPM` to change that (0 = no limit). RAGAS
+  reaches Gemini through Google's OpenAI-compatible endpoint, because its native
+  Google path needs a newer `instructor` than RAGAS 0.4.4 installs.
 - **Cost:** each LLM span takes several judge calls (DeepEval: 2–3 per metric).
   Use small `--traces` / `--limit` values while trying it, and in production run
   the judges on tail-sampled traces only.

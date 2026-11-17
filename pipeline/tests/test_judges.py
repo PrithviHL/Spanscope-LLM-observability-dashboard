@@ -8,6 +8,7 @@ installed (CI installs them in the "judges" job).
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import io
 import os
@@ -18,7 +19,16 @@ from contextlib import redirect_stdout
 
 from llm_obs.__main__ import main
 from llm_obs.evals import enrich_with_evals
-from llm_obs.judges import DeepEvalScorer, HeuristicScorer, RagasScorer, make_scorer
+from llm_obs.judges import (
+    DeepEvalScorer,
+    HeuristicScorer,
+    Pacer,
+    RagasScorer,
+    _pace,
+    judge_provider,
+    judge_rpm,
+    make_scorer,
+)
 from llm_obs.simulate import synth_trace
 
 HAS_DEEPEVAL = importlib.util.find_spec("deepeval") is not None
@@ -99,6 +109,55 @@ class RagasScorerTests(unittest.TestCase):
         metrics = {"faithfulness": FakeAsyncMetric(0.5)}
         RagasScorer(metrics=metrics).score("q", "a", "")
         self.assertEqual(metrics["faithfulness"].calls, 0)
+
+
+class ProviderAndPacingTests(unittest.TestCase):
+    def test_provider_follows_model_name(self):
+        self.assertEqual(judge_provider("gemini-3.6-flash"), "google")
+        self.assertEqual(judge_provider("claude-opus-5-5"), "anthropic")
+
+    def test_rpm_defaults_to_free_tier_for_gemini_only(self):
+        old = os.environ.pop("SPANSCOPE_JUDGE_RPM", None)
+        try:
+            self.assertEqual(judge_rpm("gemini-3.6-flash"), 4)
+            self.assertEqual(judge_rpm("claude-opus-5-5"), 0)
+            os.environ["SPANSCOPE_JUDGE_RPM"] = "30"
+            self.assertEqual(judge_rpm("claude-opus-5-5"), 30)
+        finally:
+            os.environ.pop("SPANSCOPE_JUDGE_RPM", None)
+            if old is not None:
+                os.environ["SPANSCOPE_JUDGE_RPM"] = old
+
+    def test_pacer_spaces_calls(self):
+        now = [100.0]
+        slept = []
+        pacer = Pacer(rpm=6, clock=lambda: now[0], sleep=slept.append)  # 10 s apart
+        for _ in range(3):
+            pacer.wait()
+        self.assertEqual(slept, [10.0, 20.0])  # reserved slots at +0, +10, +20
+
+    def test_pace_wraps_sync_and_async_calls(self):
+        waits = []
+
+        class Judge:
+            def generate(self, x):
+                return x + 1
+
+            async def agenerate(self, x):
+                return x + 2
+
+        pacer = Pacer(rpm=60)
+        pacer.wait = lambda: waits.append("sync")
+
+        async def turn():
+            waits.append("async")
+
+        pacer.await_turn = turn
+        judge = Judge()
+        _pace(judge, pacer, ("generate",), ("agenerate",))
+        self.assertEqual(judge.generate(1), 2)
+        self.assertEqual(asyncio.run(judge.agenerate(1)), 3)
+        self.assertEqual(waits, ["sync", "async"])
 
 
 class WiringTests(unittest.TestCase):
@@ -197,6 +256,14 @@ class RealDeepEvalTests(unittest.TestCase):
         self.assertEqual(set(scorer.metrics), {"faithfulness", "toxicity", "pii_leak"})
 
 
+    def test_gemini_judge_without_calling_it(self):
+        os.environ.setdefault("GEMINI_API_KEY", "test-key-not-used")
+        from deepeval.models import GeminiModel
+
+        scorer = make_scorer("deepeval", "gemini-3.6-flash")
+        self.assertIsInstance(scorer.metrics["toxicity"].model, GeminiModel)
+
+
 @unittest.skipUnless(HAS_RAGAS, "needs pip install 'spanscope-pipeline[ragas]'")
 class RealRagasTests(unittest.TestCase):
     def scorer(self, yes):
@@ -230,6 +297,13 @@ class RealRagasTests(unittest.TestCase):
         scorer = make_scorer("ragas")
         self.assertEqual(scorer.model, "claude-opus-5-5")
         self.assertEqual(set(scorer.metrics), {"faithfulness", "context_relevance"})
+
+    def test_gemini_judge_uses_the_openai_compatible_endpoint(self):
+        os.environ.setdefault("GEMINI_API_KEY", "test-key-not-used")
+        scorer = make_scorer("ragas", "gemini-3.6-flash")
+        llm = scorer.metrics["faithfulness"].llm
+        self.assertEqual(llm.provider, "openai")
+        self.assertIn("generativelanguage.googleapis.com", str(llm.client.client.base_url))
 
 
 if __name__ == "__main__":

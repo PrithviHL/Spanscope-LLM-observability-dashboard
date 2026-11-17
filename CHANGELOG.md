@@ -15,6 +15,10 @@ All notable changes to this project are documented here. The format follows
   DeepEval's toxicity and PII scores are flipped to Spanscope's direction
   (higher = worse), failed judge calls fall back to the heuristic, and both
   libraries' usage analytics are off by default.
+- **Gemini judges** for both backends (`--judge-model gemini-…`, key in
+  `GEMINI_API_KEY`), usable on Gemini's free tier. Judge requests are paced
+  with `SPANSCOPE_JUDGE_RPM` (default 4 a minute for Gemini, unlimited for
+  Claude), and DeepEval retries rate-limited calls up to 6 times.
 - A CI job that runs the real DeepEval and RAGAS metric code against a fake
   judge model (no API key needed).
 

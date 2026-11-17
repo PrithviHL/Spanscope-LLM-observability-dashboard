@@ -11,8 +11,9 @@ requires-python = ">=3.9"
 dependencies = []
 
 [project.optional-dependencies]
-# Model-based evals judged by Claude. Need Python 3.10+ and an Anthropic API key.
-deepeval = ["deepeval>=4.3,<5", "anthropic>=2"]
+# Model-based evals judged by Claude or Gemini. Need Python 3.10+ and an
+# Anthropic or Gemini API key (Gemini has a free tier).
+deepeval = ["deepeval>=4.3,<5", "anthropic>=2", "google-genai>=1"]
 ragas = ["ragas>=0.4.4,<0.5", "anthropic>=2"]
 judges = ["spanscope-pipeline[deepeval,ragas]"]
 
