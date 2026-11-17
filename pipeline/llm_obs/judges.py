@@ -131,6 +131,9 @@ def _no_telemetry() -> None:
     os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "1")
     os.environ.setdefault("RAGAS_DO_NOT_TRACK", "true")
     os.environ.setdefault("DEEPEVAL_RETRY_MAX_ATTEMPTS", "6")
+    # DeepEval splits a 180 s budget across attempts unless this is set, which
+    # with 6 attempts cuts slow judge calls off after ~26 s.
+    os.environ.setdefault("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE", "120")
 
 
 def _missing(extra: str, err: ImportError) -> ImportError:
@@ -203,6 +206,7 @@ class DeepEvalScorer:
         for key, metric in self.metrics.items():
             if (only and key not in only) or (key == "faithfulness" and not context):
                 continue
+            started = time.monotonic()
             try:
                 with warnings.catch_warnings():
                     # DeepEval 4.3 announces its polarity change on every measure();
@@ -216,6 +220,7 @@ class DeepEvalScorer:
                 continue
             value = float(value)
             out[key] = round(value if key == "faithfulness" else 1.0 - value, 4)
+            log.info("deepeval %s = %.2f (%.1fs)", key, out[key], time.monotonic() - started)
         out["eval.backend"] = self.name
         out["eval.judge_model"] = self.model
         if failed:
@@ -267,6 +272,7 @@ class RagasScorer:
         for key, metric in self.metrics.items():
             if only and key not in only:
                 continue
+            started = time.monotonic()
             try:
                 if key == "faithfulness":
                     result = await metric.ascore(user_input=prompt or "-", response=response,
@@ -280,6 +286,7 @@ class RagasScorer:
             value = getattr(result, "value", result)
             if value is not None:
                 out[key] = round(float(value), 4)
+                log.info("ragas %s = %.2f (%.1fs)", key, out[key], time.monotonic() - started)
         if failed:
             out["eval.fallback"] = ",".join(failed)
         return out

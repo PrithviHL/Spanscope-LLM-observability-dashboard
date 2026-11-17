@@ -12,6 +12,7 @@ Sets:
 import argparse
 import hashlib
 import json
+import logging
 import os
 import sys
 
@@ -45,6 +46,10 @@ ap.add_argument("--backend", choices=BACKENDS, default="heuristic")
 ap.add_argument("--judge-model", default=None)
 ap.add_argument("--limit", type=int, default=0, help="max examples per class per set (0 = all)")
 args = ap.parse_args()
+# Judge calls and fallbacks go to stderr, so a long run can be followed in a log.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+for noisy in ("httpx", "httpx2", "google_genai", "openai", "anthropic", "instructor"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 scorer = make_scorer(args.backend, args.judge_model)
 print(f"backend: {args.backend}" + (f", judge {scorer.model}" if hasattr(scorer, "model") else ""))
 
